@@ -190,12 +190,71 @@ void Test_SDMM_CSR_IKJ_D128(IT M, IT N, IT K, const CSR<IT, NT>& A, NT *B, IT ld
 
 }
 
+// from ATLAS;s ATL_epsilon.c 
+template <typename NT> 
+NT Epsilon(void)
+{
+   static NT eps; 
+   const NT half=0.5; 
+   volatile NT maxval, f1=0.5; 
+
+   do
+   {
+      eps = f1;
+      f1 *= half;
+      maxval = 1.0 + f1;
+   }
+   while(maxval != 1.0);
+   return(eps);
+}
+
+template <typename IT, typename NT>
+int doTesting(IT NNZA, IT M, IT N, NT *C, NT *D, IT ldc)
+{
+   IT i, j, k;
+   NT ErrBound, diff, EPS; 
+   
+   int nerr = 0;
+/*
+ * Error bound : computation M*NNZ FMAC
+ *
+ */
+   EPS = Epsilon<VALUETYPE>();
+   ErrBound = 2 * NNZA * N * EPS; 
+   // row major! 
+   for (i=0; i < M; i++)
+   {
+      for (j=0; j < N; j++)
+      {
+         k = i*ldc + j;
+         diff = C[k] - D[k];
+         if (diff < 0.0) diff = -diff; 
+         if (diff > ErrBound)
+         {
+      #if 0
+            fprintf(stderr, "C(%d,%d) : expected=%e, got=%e, diff=%e\n",
+                    i, j, C[k], D[k], diff);
+      #endif
+            nerr++;
+         }
+         else if (D[k] != D[k]) /* test for NaNs */
+         {
+            fprintf(stderr, "C(%d,%d) : expected=%e, got=%e\n",
+                    i, j, C[k], D[k]);
+            nerr++;
+
+         }
+      }
+   }
+   return(nerr);
+}
 
 void GetSpeedup(string inputfile, int option, INDEXTYPE D)
 {
 /*
  * get the input matrix as CSR format 
  */
+   int nerr;
    INDEXTYPE N; /* A->NxN, B-> NxD, C-> NxD */ 
    double start, end; 
    CSR<INDEXTYPE, VALUETYPE> A_csr; 
@@ -228,7 +287,7 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D)
    for (INDEXTYPE i=0; i < N*D; i++)
    {
       C[i] = C0[i] = 0.0;  // init with 0
-   #if 1
+   #if 0
       B[i] = distribution(generator);  
    #else
       B[i] = 0.5; 
@@ -253,9 +312,18 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D)
  */
    cout << "calling test SDMM first ... " << endl;
    start = omp_get_wtime(); 
-   Test_SDMM_CSR_IKJ_D128<INDEXTYPE, VALUETYPE>(N, D, N, A_csr, B, D, C0, D);
+   Test_SDMM_CSR_IKJ_D128<INDEXTYPE, VALUETYPE>(N, D, N, A_csr, B, D, C, D);
    end = omp_get_wtime(); 
    fprintf(stdout, "Time SDMM (N=%d,D=%d) = %e\n", N, D, end-start); 
+
+/*
+ * Test the result  
+ */
+   nerr = doTesting(A_csr.nnz, N, D, C0, C, D); 
+   if (!nerr)
+      fprintf(stdout, "PASSED TEST\n");
+   else
+      fprintf(stdout, "FAILED TEST, %d ELEMENTS\n", nerr);
 
 }
 
