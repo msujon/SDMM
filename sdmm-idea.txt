@@ -1,0 +1,22 @@
+
+SDMM ideas to time: 
+
+1. CSR IJK loop: 
+   Access: 
+      IA = 2M 
+      JA = N*NNZ 
+       A = N*NNZ 
+       B = N*NNZ, indirect 
+       C = M*N read and write 
+
+2. CSR IKJ loop:
+   Access: 
+      IA = 2M 
+      JA = NNZ
+       A = NNZ
+       B = N*NNZ, cont in row 
+       C = N*NNZ, read and write  
+
+3. BCSR:
+
+
