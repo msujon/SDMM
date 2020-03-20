@@ -238,6 +238,7 @@ void SDMM_CSC_KIJ(IT M, IT N, IT K, const CSC<IT, NT>& A, NT *B, IT ldb,
       {
          NT a0 = A.values[i];
          IT ia0 = A.rowids[i];
+         if (ia0 >= M) continue; 
          for (IT j=0; j < N; j++)
             C[ia0*ldc+j] += a0 * B[k*ldb + j];  // row-major C  
       }
@@ -254,14 +255,94 @@ void SDMM_CSC_KIJ_D128(IT M, IT N, IT K, const CSC<IT, NT>& A, NT *B, IT ldb,
 {
    for (IT k=0; k < K; k++)
    {
+      VTYPE VB0, VB1, VB2, VB3, VB4, VB5, VB6, VB7, 
+            VB8, VB9, VB10, VB11, VB12, VB13, VB14, VB15; 
       IT ja0 = A.colptr[k];
       IT ja1 = A.colptr[k+1]; 
+
+         BCL_vldu(VB0, B+k*ldb+VLEN*0); 
+         BCL_vldu(VB1, B+k*ldb+VLEN*1); 
+         BCL_vldu(VB2, B+k*ldb+VLEN*2); 
+         BCL_vldu(VB3, B+k*ldb+VLEN*3); 
+         BCL_vldu(VB4, B+k*ldb+VLEN*4); 
+         BCL_vldu(VB5, B+k*ldb+VLEN*5); 
+         BCL_vldu(VB6, B+k*ldb+VLEN*6); 
+         BCL_vldu(VB7, B+k*ldb+VLEN*7); 
+         BCL_vldu(VB8, B+k*ldb+VLEN*8); 
+         BCL_vldu(VB9, B+k*ldb+VLEN*9); 
+         BCL_vldu(VB10, B+k*ldb+VLEN*10); 
+         BCL_vldu(VB11, B+k*ldb+VLEN*11); 
+         BCL_vldu(VB12, B+k*ldb+VLEN*12); 
+         BCL_vldu(VB13, B+k*ldb+VLEN*13); 
+         BCL_vldu(VB14, B+k*ldb+VLEN*14); 
+         BCL_vldu(VB15, B+k*ldb+VLEN*15); 
+
       for (IT i=ja0; i < ja1; i++)
       {
+         VTYPE VC0, VC1, VC2, VC3, VC4, VC5, VC6, VC7, 
+               VC8, VC9, VC10, VC11, VC12, VC13, VC14, VC15; 
+         VTYPE VA0; 
+         
          NT a0 = A.values[i];
          IT ia0 = A.rowids[i];
+         
+         if (ia0 >= M) continue; 
+         
+         BCL_vset1(VA0, a0);
+      #if 0
          for (IT j=0; j < N; j++)
             C[ia0*ldc+j] += a0 * B[k*ldb + j];  // row-major C  
+      #endif
+         BCL_vldu(VC0, C+ia0*ldc+VLEN*0); 
+         BCL_vldu(VC1, C+ia0*ldc+VLEN*1); 
+         BCL_vldu(VC2, C+ia0*ldc+VLEN*2); 
+         BCL_vldu(VC3, C+ia0*ldc+VLEN*3); 
+         BCL_vldu(VC4, C+ia0*ldc+VLEN*4); 
+         BCL_vldu(VC5, C+ia0*ldc+VLEN*5); 
+         BCL_vldu(VC6, C+ia0*ldc+VLEN*6); 
+         BCL_vldu(VC7, C+ia0*ldc+VLEN*7); 
+         BCL_vldu(VC8, C+ia0*ldc+VLEN*8); 
+         BCL_vldu(VC9, C+ia0*ldc+VLEN*9); 
+         BCL_vldu(VC10, C+ia0*ldc+VLEN*10); 
+         BCL_vldu(VC11, C+ia0*ldc+VLEN*11); 
+         BCL_vldu(VC12, C+ia0*ldc+VLEN*12); 
+         BCL_vldu(VC13, C+ia0*ldc+VLEN*13); 
+         BCL_vldu(VC14, C+ia0*ldc+VLEN*14); 
+         BCL_vldu(VC15, C+ia0*ldc+VLEN*15); 
+         
+         BCL_vmac(VC0, VA0, VB0); 
+         BCL_vmac(VC1, VA0, VB1); 
+         BCL_vmac(VC2, VA0, VB2); 
+         BCL_vmac(VC3, VA0, VB3); 
+         BCL_vmac(VC4, VA0, VB4); 
+         BCL_vmac(VC5, VA0, VB5); 
+         BCL_vmac(VC6, VA0, VB6); 
+         BCL_vmac(VC7, VA0, VB7); 
+         BCL_vmac(VC8, VA0, VB8); 
+         BCL_vmac(VC9, VA0, VB9); 
+         BCL_vmac(VC10, VA0, VB10); 
+         BCL_vmac(VC11, VA0, VB11); 
+         BCL_vmac(VC12, VA0, VB12); 
+         BCL_vmac(VC13, VA0, VB13); 
+         BCL_vmac(VC14, VA0, VB14);
+         BCL_vmac(VC15, VA0, VB15); 
+      
+         BCL_vstu(C+ia0*ldc+VLEN*0, VC0); 
+         BCL_vstu(C+ia0*ldc+VLEN*1, VC1); 
+         BCL_vstu(C+ia0*ldc+VLEN*2, VC2); 
+         BCL_vstu(C+ia0*ldc+VLEN*3, VC3); 
+         BCL_vstu(C+ia0*ldc+VLEN*4, VC4); 
+         BCL_vstu(C+ia0*ldc+VLEN*5, VC5); 
+         BCL_vstu(C+ia0*ldc+VLEN*6, VC6); 
+         BCL_vstu(C+ia0*ldc+VLEN*7, VC7); 
+         BCL_vstu(C+ia0*ldc+VLEN*8, VC8); 
+         BCL_vstu(C+ia0*ldc+VLEN*9, VC9); 
+         BCL_vstu(C+ia0*ldc+VLEN*10, VC10); 
+         BCL_vstu(C+ia0*ldc+VLEN*11, VC11); 
+         BCL_vstu(C+ia0*ldc+VLEN*12, VC12); 
+         BCL_vstu(C+ia0*ldc+VLEN*13, VC13); 
+         BCL_vstu(C+ia0*ldc+VLEN*14, VC14); 
+         BCL_vstu(C+ia0*ldc+VLEN*15, VC15); 
       }
    }
 }
@@ -343,6 +424,7 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M)
    double start, end, t0, t1, t2; 
    CSR<INDEXTYPE, VALUETYPE> A_csr; 
    CSC<INDEXTYPE, VALUETYPE> A_csc; 
+   CSC<INDEXTYPE, VALUETYPE> A_Mcsc; 
 
    std::default_random_engine generator;
    std::uniform_real_distribution<double> distribution(0.0,1.0);
@@ -447,16 +529,17 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M)
  */
    cout << "Calling CSC_KIJ version ..." << endl;
    start = omp_get_wtime(); 
-   SDMM_CSC_KIJ<INDEXTYPE, VALUETYPE>(M, D, N, A_csc, B, D, C1, D);
+   //SDMM_CSC_KIJ<INDEXTYPE, VALUETYPE>(M, D, N, A_csc, B, D, C1, D);
+   SDMM_CSC_KIJ_D128<INDEXTYPE, VALUETYPE>(M, D, N, A_csc, B, D, C1, D);
    end = omp_get_wtime(); 
    t2 = end-start; 
    fprintf(stdout, "Time SDMM (M=%d,N=%d,D=%d) = %e\n", M, N, D, t2); 
-   fprintf(stdout, "**** Speedup of CSC_KIJ over CSR_IKJ = %.2f\n", t0/t2); 
+   fprintf(stdout, "**** Speedup of CSC_KIJ over CSR_IKJ = %.4f\n", t0/t2); 
 
 /*
  * Test the result  
  */
-   cout << "testing SDMM of resgister blocking... " << endl;
+   cout << "testing SDMM of CSC_KIJ... " << endl;
    nerr = doTesting(A_csr.nnz, M, D, C0, C1, D); 
    if (!nerr)
       fprintf(stdout, "PASSED TEST\n");
