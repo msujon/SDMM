@@ -13,6 +13,49 @@
 #define INDEXTYPE int
 #define VALUETYPE double 
 
+/*
+ *    CSC class members: 
+ *       nnz, rows, cols, totalcols(for parallel case)
+ *       colptr, rowids, values 
+ *
+ */
+template<typename IT, typename NT>
+void ConvertMNcsc2NNcsc(IT M, const CSC<IT, NT> &A, CSC<IT, NT> &Am)
+{
+   IT nnz=0; 
+   #if 0
+   fprintf(stdout, "nnz=%d, rows=%d, cols=%d M=%d\n", A.nnz, A.rows, A.cols, M);
+   #endif
+   
+/*
+ * will write a member function in CSC if this experiment becomes successful 
+ */
+/*
+ * not optimized, not parallelized... will consider it later 
+ */
+   for (IT i=0, nnz=0; i < A.cols; i++)
+   {
+      IT cl0 = A.colptr[i];
+      IT cl1 = A.colptr[i+1]; 
+
+      Am.colptr[i] = nnz;
+
+      for (IT j=cl0; j < cl1; j++)
+      {
+         IT ia0 = A.rowids[j]; 
+         if (ia0 >= M) break;  // assumption: rowids are sorted 
+         Am.rowids[nnz] = A.rowids[j]; 
+         Am.values[nnz] = A.values[j]; 
+         nnz++;
+      }
+      Am.colptr[i+1] = nnz;
+#if 0
+      fprintf(stdout, "--- i=%d, i+1=%d, cp[i]=%d, cp[i+1]=%d\n", 
+              i, i+1, Am.colptr[i], Am.colptr[i+1]);
+#endif
+   }
+}
+
 
 void Usage()
 {
@@ -238,7 +281,10 @@ void SDMM_CSC_KIJ(IT M, IT N, IT K, const CSC<IT, NT>& A, NT *B, IT ldb,
       {
          NT a0 = A.values[i];
          IT ia0 = A.rowids[i];
-         if (ia0 >= M) continue; 
+   #if 0
+         if (ia0 >= M)
+            break;
+   #endif
          for (IT j=0; j < N; j++)
             C[ia0*ldc+j] += a0 * B[k*ldb + j];  // row-major C  
       }
@@ -285,9 +331,9 @@ void SDMM_CSC_KIJ_D128(IT M, IT N, IT K, const CSC<IT, NT>& A, NT *B, IT ldb,
          
          NT a0 = A.values[i];
          IT ia0 = A.rowids[i];
-         
-         if (ia0 >= M) continue; 
-         
+      #if 0 
+         if (ia0 >= M) break; 
+      #endif
          BCL_vset1(VA0, a0);
       #if 0
          for (IT j=0; j < N; j++)
@@ -424,7 +470,6 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M)
    double start, end, t0, t1, t2; 
    CSR<INDEXTYPE, VALUETYPE> A_csr; 
    CSC<INDEXTYPE, VALUETYPE> A_csc; 
-   CSC<INDEXTYPE, VALUETYPE> A_Mcsc; 
 
    std::default_random_engine generator;
    std::uniform_real_distribution<double> distribution(0.0,1.0);
@@ -432,6 +477,14 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M)
    SetInputMatricesAsCSC(A_csc, inputfile);
    A_csc.Sorted(); 
 
+   N = A_csc.cols; 
+   if (!M || M > N)
+      M = N;
+/*
+ * convert full A_csc to A_Mcsc 
+ */
+   CSC<INDEXTYPE, VALUETYPE> A_Mcsc(A_csc.nnz, A_csc.rows, A_csc.cols, A_csc.nnz); // copying all, not efficient
+   ConvertMNcsc2NNcsc(M, A_csc, A_Mcsc);
 #if 0
    printCSC(A_csc);
 #endif
@@ -441,10 +494,8 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M)
    A_csr = *(new CSR<INDEXTYPE, VALUETYPE>(A_csc));
    A_csr.Sorted();
 
-   N = A_csr.rows; 
+   //N = A_csr.rows; 
 
-   if (!M || M > N)
-      M = N;
 
 #if 0
    cout << "CSR Info: " << endl;
@@ -476,7 +527,7 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M)
    cout << "intializing dense matrix ..." << endl;
    for (INDEXTYPE i=0; i < N*D; i++)
    {
-   #if 0
+   #if 1
       B[i] = distribution(generator);  
    #else
       B[i] = 0.5; 
@@ -529,8 +580,13 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M)
  */
    cout << "Calling CSC_KIJ version ..." << endl;
    start = omp_get_wtime(); 
+#if 0
    //SDMM_CSC_KIJ<INDEXTYPE, VALUETYPE>(M, D, N, A_csc, B, D, C1, D);
    SDMM_CSC_KIJ_D128<INDEXTYPE, VALUETYPE>(M, D, N, A_csc, B, D, C1, D);
+#else
+   //SDMM_CSC_KIJ<INDEXTYPE, VALUETYPE>(M, D, N, A_Mcsc, B, D, C1, D);
+   SDMM_CSC_KIJ_D128<INDEXTYPE, VALUETYPE>(M, D, N, A_Mcsc, B, D, C1, D);
+#endif
    end = omp_get_wtime(); 
    t2 = end-start; 
    fprintf(stdout, "Time SDMM (M=%d,N=%d,D=%d) = %e\n", M, N, D, t2); 
