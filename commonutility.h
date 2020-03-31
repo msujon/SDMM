@@ -28,8 +28,10 @@ void SetInputMatricesAsCSC(CSC<INDEXTYPE, VALUETYPE> &A_csc, string inputfile)
 	string inputname;
     	A_csc.make_empty();
         inputname = inputfile;
+#ifdef PRINTMSG
         cout << "Reading input matrices in text (ascii)... " << endl;
 	cout << "Input File Directory:" << inputname << endl;
+#endif
         ReadASCII(inputname, A_csc);
         stringstream ss1(inputname);
         string cur;

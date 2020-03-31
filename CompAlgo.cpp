@@ -13,12 +13,44 @@
 #define INDEXTYPE int
 #define VALUETYPE double 
 
+#if 0
+template<typename IT, typename NT>
+typedef void (*csr_kernel_t)(IT M, IT N, IT K, const CSR<IT, VALUETTYPE>&A, 
+      NT *B, IT rldb, NT *C, IT rldc); 
+
+template<typename IT, typename NT>
+typedef void (*csc_kernel_t)(IT M, IT N, IT K, const CSC<IT, VALUETTYPE>&A, 
+      NT *B, IT rldb, NT *C, IT rldc); 
+#else
+typedef void (*csr_kernel_t)(INDEXTYPE M, INDEXTYPE N, INDEXTYPE K, 
+      const CSR<INDEXTYPE, VALUETYPE>&A, VALUETYPE *B, INDEXTYPE rldb, 
+      VALUETYPE *C, INDEXTYPE rldc); 
+
+typedef void (*csc_kernel_t)(INDEXTYPE M, INDEXTYPE N, INDEXTYPE K, 
+      const CSC<INDEXTYPE, VALUETYPE>&A, VALUETYPE *B, INDEXTYPE rldb, 
+      VALUETYPE *C, INDEXTYPE rldc); 
+#endif
+/*
+ * some misc definition: will move to another file later 
+ *    from ATLAS 
+ */
+#define ATL_MaxMalloc 268435456UL
+#define ATL_Cachelen 64
+   #define ATL_MulByCachelen(N_) ( (N_) << 6 )
+   #define ATL_DivByCachelen(N_) ( (N_) >> 6 )
+
+#define ATL_AlignPtr(vp) (void*) \
+        ATL_MulByCachelen(ATL_DivByCachelen((((size_t)(vp))+ATL_Cachelen-1)))
+
 /*
  *    CSC class members: 
  *       nnz, rows, cols, totalcols(for parallel case)
  *       colptr, rowids, values 
  *
  */
+
+
+#if 0
 template<typename IT, typename NT>
 void ConvertMNcsc2NNcsc(IT M, const CSC<IT, NT> &A, CSC<IT, NT> &Am)
 {
@@ -56,6 +88,14 @@ void ConvertMNcsc2NNcsc(IT M, const CSC<IT, NT> &A, CSC<IT, NT> &Am)
    }
 }
 
+void convertMNcsr2BMNcsr(IT M, IT K, IT BM, IT BK, const CSR<IT, NT> &A, 
+      CSR<IT, NT> &Ablk)
+{
+
+}
+
+#endif
+
 
 void Usage()
 {
@@ -66,13 +106,16 @@ void Usage()
 }
 
 void GetFlags(int narg, char **argv, string &inputfile, int &option, 
-      INDEXTYPE &D, INDEXTYPE &M)
+      INDEXTYPE &D, INDEXTYPE &M, int &csKB, int &nrep)
 {
    option = 1; 
    inputfile = "";
    //D = 256; 
    D = 128; 
-   M = 0; 
+   M = 0;
+   nrep = 1;
+   //csKB = 1024; // L2 in KB 
+   csKB = 25344; // L3 in KB 
 
    for(int p = 0; p < narg; p++)
    {
@@ -91,6 +134,14 @@ void GetFlags(int narg, char **argv, string &inputfile, int &option,
       else if(strcmp(argv[p], "-M") == 0)
       {
 	 M = atoi(argv[p+1]);
+      }
+      else if(strcmp(argv[p], "-C") == 0)
+      {
+	 csKB = atoi(argv[p+1]);
+      }
+      else if(strcmp(argv[p], "-nrep") == 0)
+      {
+	 nrep = atoi(argv[p+1]);
       }
       else if(strcmp(argv[p], "-h") == 0)
       {
@@ -117,19 +168,22 @@ void GetFlags(int narg, char **argv, string &inputfile, int &option,
           *    for example, N=128, use 16 AVX512 register and use register blocking
           
  */
-template <typename IT, typename NT>
-void Trusted_SDMM_CSR_IKJ(IT M, IT N, IT K, const CSR<IT, NT>& A, NT *B, IT ldb,
-      NT *C, IT ldc)
+//template <typename IT, typename NT>
+void Trusted_SDMM_CSR_IKJ(INDEXTYPE M, INDEXTYPE N, INDEXTYPE K, const CSR<INDEXTYPE, VALUETYPE>& A, VALUETYPE *B, INDEXTYPE ldb,
+      VALUETYPE *C, INDEXTYPE ldc)
 {
-   for (IT i=0; i < M; i++)
+#if 0
+   cout << "Inside trusted kernel " << endl;
+#endif
+   for (INDEXTYPE i=0; i < M; i++)
    {
-      IT ia0 = A.rowptr[i];
-      IT ia1 = A.rowptr[i+1]; 
-      for (IT k=ia0; k < ia1; k++)
+      INDEXTYPE ia0 = A.rowptr[i];
+      INDEXTYPE ia1 = A.rowptr[i+1]; 
+      for (INDEXTYPE k=ia0; k < ia1; k++)
       {
-         NT a0 = A.values[k];
-         IT ja0 = A.colids[k];
-         for (IT j=0; j < N; j++)
+         VALUETYPE a0 = A.values[k];
+         INDEXTYPE ja0 = A.colids[k];
+         for (INDEXTYPE j=0; j < N; j++)
             C[i*ldc+j] += a0 * B[ja0*ldb + j];  // row-major C  
       }
    }
@@ -150,21 +204,22 @@ void PrintVector(char*name, VTYPE v)
 }
 
 
-template <typename IT, typename NT>
-void Test_SDMM_CSR_IKJ_D128(IT M, IT N, IT K, const CSR<IT, NT>& A, NT *B, IT ldb,
-      NT *C, IT ldc)
+void SDMM_CSR_IKJ_D128(INDEXTYPE M, INDEXTYPE N, INDEXTYPE K, 
+      const CSR<INDEXTYPE, VALUETYPE>& A, VALUETYPE *B, INDEXTYPE ldb,
+      VALUETYPE *C, INDEXTYPE ldc)
 {
-   for (IT i=0; i < M; i++)
+
+   for (INDEXTYPE i=0; i < M; i++)
    {
-      IT ia0 = A.rowptr[i];
-      IT ia1 = A.rowptr[i+1]; 
+      INDEXTYPE ia0 = A.rowptr[i];
+      INDEXTYPE ia1 = A.rowptr[i+1]; 
 /*
  *    register block both B and C  
  */
       VTYPE VC0, VC1, VC2, VC3, VC4, VC5, VC6, VC7, 
             VC8, VC9, VC10, VC11, VC12, VC13, VC14, VC15; 
 /*
- *    D=128:  AVXZ: #8 double
+ *    D=128:  AVXZ: #8 VALUETYPE
  *       128/8 = 16 
  */
    #if 0
@@ -187,15 +242,15 @@ void Test_SDMM_CSR_IKJ_D128(IT M, IT N, IT K, const CSR<IT, NT>& A, NT *B, IT ld
       BCL_vldu(VC14, C+i*ldc+VLEN*14); 
       BCL_vldu(VC15, C+i*ldc+VLEN*15); 
 
-      for (IT k=ia0; k < ia1; k++)
+      for (INDEXTYPE k=ia0; k < ia1; k++)
       {
          VTYPE VB0, VB1, VB2, VB3, VB4, VB5, VB6, VB7, 
             VB8, VB9, VB10, VB11, VB12, VB13, VB14, VB15; 
          VTYPE VA0; 
-         NT a0 = A.values[k];
-         IT ja0 = A.colids[k];
+         VALUETYPE a0 = A.values[k];
+         INDEXTYPE ja0 = A.colids[k];
       #if 0
-         for (IT j=0; j < N; j++)
+         for (INDEXTYPE j=0; j < N; j++)
             C[i*ldc+j] += a0 * B[ja0*ldb + j];  // row-major C  
       #else
          
@@ -265,9 +320,153 @@ void Test_SDMM_CSR_IKJ_D128(IT M, IT N, IT K, const CSR<IT, NT>& A, NT *B, IT ld
    }
 
 }
+
+void SDMM_CSR_IKJ_D128_Aligned(INDEXTYPE M, INDEXTYPE N, INDEXTYPE K, 
+      const CSR<INDEXTYPE, VALUETYPE>& A, VALUETYPE *B, INDEXTYPE ldb,
+      VALUETYPE *C, INDEXTYPE ldc)
+{
+
+   for (INDEXTYPE i=0; i < M; i++)
+   {
+      INDEXTYPE ia0 = A.rowptr[i];
+      INDEXTYPE ia1 = A.rowptr[i+1]; 
 /*
- * CSC_KIJ 
+ *    register block both B and C  
  */
+      VTYPE VC0, VC1, VC2, VC3, VC4, VC5, VC6, VC7, 
+            VC8, VC9, VC10, VC11, VC12, VC13, VC14, VC15; 
+/*
+ *    D=128:  AVXZ: #8 VALUETYPE
+ *       128/8 = 16 
+ */
+   #if 0
+         fprintf(stdout, "--- before c[%d,0]= %f \n", i, C[i*ldc]);
+   #endif
+      BCL_vld(VC0, C+i*ldc+VLEN*0); 
+      BCL_vld(VC1, C+i*ldc+VLEN*1); 
+      BCL_vld(VC2, C+i*ldc+VLEN*2); 
+      BCL_vld(VC3, C+i*ldc+VLEN*3); 
+      BCL_vld(VC4, C+i*ldc+VLEN*4); 
+      BCL_vld(VC5, C+i*ldc+VLEN*5); 
+      BCL_vld(VC6, C+i*ldc+VLEN*6); 
+      BCL_vld(VC7, C+i*ldc+VLEN*7); 
+      BCL_vld(VC8, C+i*ldc+VLEN*8); 
+      BCL_vld(VC9, C+i*ldc+VLEN*9); 
+      BCL_vld(VC10, C+i*ldc+VLEN*10); 
+      BCL_vld(VC11, C+i*ldc+VLEN*11); 
+      BCL_vld(VC12, C+i*ldc+VLEN*12); 
+      BCL_vld(VC13, C+i*ldc+VLEN*13); 
+      BCL_vld(VC14, C+i*ldc+VLEN*14); 
+      BCL_vld(VC15, C+i*ldc+VLEN*15); 
+
+      for (INDEXTYPE k=ia0; k < ia1; k++)
+      {
+         VTYPE VB0, VB1, VB2, VB3, VB4, VB5, VB6, VB7, 
+            VB8, VB9, VB10, VB11, VB12, VB13, VB14, VB15; 
+         VTYPE VA0; 
+         VALUETYPE a0 = A.values[k];
+         INDEXTYPE ja0 = A.colids[k];
+      #if 0
+         for (INDEXTYPE j=0; j < N; j++)
+            C[i*ldc+j] += a0 * B[ja0*ldb + j];  // row-major C  
+      #else
+         
+         BCL_vset1(VA0, a0);
+
+         BCL_vld(VB0, B+ja0*ldb+VLEN*0); 
+         BCL_vld(VB1, B+ja0*ldb+VLEN*1); 
+         BCL_vld(VB2, B+ja0*ldb+VLEN*2); 
+         BCL_vld(VB3, B+ja0*ldb+VLEN*3); 
+         BCL_vld(VB4, B+ja0*ldb+VLEN*4); 
+         BCL_vld(VB5, B+ja0*ldb+VLEN*5); 
+         BCL_vld(VB6, B+ja0*ldb+VLEN*6); 
+         BCL_vld(VB7, B+ja0*ldb+VLEN*7); 
+         BCL_vld(VB8, B+ja0*ldb+VLEN*8); 
+         BCL_vld(VB9, B+ja0*ldb+VLEN*9); 
+         BCL_vld(VB10, B+ja0*ldb+VLEN*10); 
+         BCL_vld(VB11, B+ja0*ldb+VLEN*11); 
+         BCL_vld(VB12, B+ja0*ldb+VLEN*12); 
+         BCL_vld(VB13, B+ja0*ldb+VLEN*13); 
+         BCL_vld(VB14, B+ja0*ldb+VLEN*14); 
+         BCL_vld(VB15, B+ja0*ldb+VLEN*15); 
+       
+         BCL_vmac(VC0, VA0, VB0); 
+         BCL_vmac(VC1, VA0, VB1); 
+         BCL_vmac(VC2, VA0, VB2); 
+         BCL_vmac(VC3, VA0, VB3); 
+         BCL_vmac(VC4, VA0, VB4); 
+         BCL_vmac(VC5, VA0, VB5); 
+         BCL_vmac(VC6, VA0, VB6); 
+         BCL_vmac(VC7, VA0, VB7); 
+         BCL_vmac(VC8, VA0, VB8); 
+         BCL_vmac(VC9, VA0, VB9); 
+         BCL_vmac(VC10, VA0, VB10); 
+         BCL_vmac(VC11, VA0, VB11); 
+         BCL_vmac(VC12, VA0, VB12); 
+         BCL_vmac(VC13, VA0, VB13); 
+         BCL_vmac(VC14, VA0, VB14);
+         BCL_vmac(VC15, VA0, VB15); 
+      #endif
+      }
+      BCL_vst(C+i*ldc+VLEN*0, VC0); 
+      BCL_vst(C+i*ldc+VLEN*1, VC1); 
+      BCL_vst(C+i*ldc+VLEN*2, VC2); 
+      BCL_vst(C+i*ldc+VLEN*3, VC3); 
+      BCL_vst(C+i*ldc+VLEN*4, VC4); 
+      BCL_vst(C+i*ldc+VLEN*5, VC5); 
+      BCL_vst(C+i*ldc+VLEN*6, VC6); 
+      BCL_vst(C+i*ldc+VLEN*7, VC7); 
+      BCL_vst(C+i*ldc+VLEN*8, VC8); 
+      BCL_vst(C+i*ldc+VLEN*9, VC9); 
+      BCL_vst(C+i*ldc+VLEN*10, VC10); 
+      BCL_vst(C+i*ldc+VLEN*11, VC11); 
+      BCL_vst(C+i*ldc+VLEN*12, VC12); 
+      BCL_vst(C+i*ldc+VLEN*13, VC13); 
+      BCL_vst(C+i*ldc+VLEN*14, VC14); 
+      BCL_vst(C+i*ldc+VLEN*15, VC15); 
+   }
+}
+#if 0
+/*
+ *    NOTE: need to consider dynamic blocking later 
+ */
+template <typename IT, typename NT>
+void Test_SDMM_CSR_IKJ_BK_BM
+(
+ IT M, 
+ IT N, 
+ IT K, 
+ IT BM,  /* blocking factor along M direction */
+ IT BK,  /* blocking factor along K dimension */
+ const CSR<IT, NT>& A, 
+ NT *B, 
+ IT ldb,
+ NT *C, 
+ IT ldc)
+{
+/*
+ * Main Idea: unroll in M dimension and sort access of B... 
+ *    a. it will regularize B access with the cost of irregular C write 
+ */
+   // just started working with it 
+   for (IT i=0; i < M; i++)
+   {
+      IT ia0 = A.rowptr[i];
+      IT ia1 = A.rowptr[i+1]; 
+      for (IT k=ia0; k < ia1; k++)
+      {
+         NT a0 = A.values[k];
+         IT ja0 = A.colids[k];
+         for (IT j=0; j < N; j++)
+            C[i*ldc+j] += a0 * B[ja0*ldb + j];  // row-major C  
+      }
+   }
+}
+#endif
+
+/*============================================================================
+ * CSC_KIJ 
+ *============================================================================*/
    
 template <typename IT, typename NT>
 void SDMM_CSC_KIJ(IT M, IT N, IT K, const CSC<IT, NT>& A, NT *B, IT ldb,
@@ -392,6 +591,7 @@ void SDMM_CSC_KIJ_D128(IT M, IT N, IT K, const CSC<IT, NT>& A, NT *B, IT ldb,
       }
    }
 }
+
 // from ATLAS;s ATL_epsilon.c 
 template <typename NT> 
 NT Epsilon(void)
@@ -457,10 +657,151 @@ int doTesting(IT NNZA, IT M, IT N, NT *C, NT *D, IT ldc)
          }
       }
    }
+   
    return(nerr);
 }
+/*
+ * NOTE: 
+ * FIXME: When we want to run timer multiple times to average it out, we need to
+ * be careful. When A/B/C is small enough to fit in cache, running multiple times
+ * keep it (A/B/C) in cache and provide irrealistic results... We need to 
+ * allocate large work-space for A/B/C to make it out of cache and shift the 
+ * worksace each time
+ */
+template<csr_kernel_t CSR_KERNEL>
+double doTiming_Acsr_CacheFlushing
+(
+ CSR<INDEXTYPE, VALUETYPE> A_csr, 
+ INDEXTYPE M, 
+ INDEXTYPE N, 
+ INDEXTYPE D, 
+ int csKB, 
+ int nrep     /* if nrep == 0, nrep = number of wset fit in cache */
+ )
+{
+   int i, j;
+   size_t sz, szB, szC;
+   size_t cs, setsz, nset, Nt; 
+   VALUETYPE *wp, *b, *c, *stc, *stb; 
+   double start, end;
+   
+   std::default_random_engine generator;
+   std::uniform_real_distribution<double> distribution(0.0,1.0);
+/*
+ * flushing strategy: 
+ *    A: Assuming A (NNZ) is large enough that it won't fit in cache
+ *       So we can use same A in multiple iteration 
+ *    B & C: if flush = 1, we time for out of cache...otherwise in cache 
+ */
+   cs = csKB*(1024/sizeof(VALUETYPE)); // number elem fit in cache
 
-void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M)
+   szB = ((N*D+VLEN-1)/VLEN)*VLEN;  // szB in element
+   szC = ((M*D+VLEN-1)/VLEN)*VLEN;  // szC in element 
+   
+   setsz = szB + szC; // working set in element, multiple of VLEN 
+   nset = (cs + setsz - 1)/setsz; // number of working set fit in cache  
+   if (nset < 1) nset = 1;
+
+   Nt = nset * setsz + 2*ATL_Cachelen/sizeof(VALUETYPE); // keep extra to align  
+   wp = (VALUETYPE*)malloc(Nt*sizeof(VALUETYPE));
+   assert(wp);
+
+   c = stc = (VALUETYPE*) ATL_AlignPtr(wp);
+   b = c + szC;
+   b = stb = (VALUETYPE*) ATL_AlignPtr(b);
+  
+
+   // it's not tester, so just init all with random value 
+   for (i=0; i < Nt; i++)
+      wp[i] = distribution(generator);  
+
+   /* start timer, will use ATLAS's timer later */
+
+   if (nrep < 1) nrep = 1; // user repeatation 
+
+   fprintf(stderr, "nrep = %d, nset = %d\n", nrep, nset);
+   
+   start = omp_get_wtime();
+   for (i=0, j=nset; i < nrep; i++)
+   {
+         //CSR_KERNEL<INDEXTYPE,VALUETYPE>(M, D, N, A_csr, b, D, c, D); 
+         CSR_KERNEL(M, D, N, A_csr, b, D, c, D); 
+         b += setsz; 
+         c += setsz;
+         j--; 
+         if (!j) 
+         {
+            b = stb; c = stc;
+            j = nset;
+         }
+   }
+   end = omp_get_wtime();
+
+   free(wp);
+   return((end-start)/((double)nrep));
+}
+/*
+ * Assuming large working set, sizeof B+D > L3 cache 
+ */
+template<csr_kernel_t CSR_KERNEL>
+double doTiming_Acsr
+(
+ CSR<INDEXTYPE, VALUETYPE> A_csr, 
+ INDEXTYPE M, 
+ INDEXTYPE N, 
+ INDEXTYPE D, 
+ int csKB, 
+ int nrep     /* if nrep == 0, nrep = number of wset fit in cache */
+ )
+{
+   int i, j;
+   double start, end;
+   size_t szB, szC; 
+   VALUETYPE *pb, *b, *pc, *c;
+
+   std::default_random_engine generator;
+   std::uniform_real_distribution<double> distribution(0.0,1.0);
+
+   szB = ((N*D+VLEN-1)/VLEN)*VLEN;  // szB in element
+   szC = ((M*D+VLEN-1)/VLEN)*VLEN;  // szC in element 
+
+   pb = (VALUETYPE*)malloc(szB*sizeof(VALUETYPE)+ATL_Cachelen);
+   assert(pb);
+   b = (VALUETYPE*) ATL_AlignPtr(pb);
+   
+   pc = (VALUETYPE*)malloc(szC*sizeof(VALUETYPE)+ATL_Cachelen);
+   assert(pc);
+   c = (VALUETYPE*) ATL_AlignPtr(pc); 
+   
+   for (i=0; i < szB; i++)
+      b[i] = distribution(generator);  
+   for (i=0; i < szC; i++)
+      c[i] = distribution(generator);  
+
+/*
+ * NOTE: with small working set, we should not skip the first iteration 
+ * (warm cache), because we want to time out of cache... 
+ * We run this timer either for in-cache data or large working set
+ * So we can safely skip 1st iteration... C will be in cache then
+ */
+
+   CSR_KERNEL(M, D, N, A_csr, b, D, c, D);  // skip it's timing 
+   
+   start = omp_get_wtime();
+   for (i=0; i < nrep; i++)
+      CSR_KERNEL(M, D, N, A_csr, b, D, c, D); 
+   end = omp_get_wtime();
+   
+   free(pb);
+   free(pc);
+   
+   return((end-start)/((double)nrep));
+}
+
+
+
+#if 0
+void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M, int csKB)
 {
 /*
  * get the input matrix as CSR format 
@@ -515,6 +856,7 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M)
    VALUETYPE *C = my_malloc<VALUETYPE>(N*D);
 #else
    VALUETYPE *B = (VALUETYPE*) malloc(sizeof(VALUETYPE)*N*D);
+   
    VALUETYPE *C = (VALUETYPE*)malloc(sizeof(VALUETYPE)*M*D);
    VALUETYPE *C0 = (VALUETYPE*)malloc(sizeof(VALUETYPE)*M*D);
    VALUETYPE *C1 = (VALUETYPE*)malloc(sizeof(VALUETYPE)*M*D);
@@ -554,40 +896,54 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M)
 /*
  *    just rough timing.... need a timer considering cache flusing 
  */
-   cout << "calling test SDMM first ... " << endl;
-   start = omp_get_wtime(); 
-   Test_SDMM_CSR_IKJ_D128<INDEXTYPE, VALUETYPE>(M, D, N, A_csr, B, D, C, D);
-   end = omp_get_wtime();
-   t1 = end-start;
-   fprintf(stdout, "Time SDMM (M=%d,N=%d,D=%d) = %e\n", M, N, D, t1); 
+   if (D == 128) // intrinsic code only for D=128 for testing now 
+   {
+      cout << "calling test SDMM first ... " << endl;
+      start = omp_get_wtime(); 
+      Test_SDMM_CSR_IKJ_D128<INDEXTYPE, VALUETYPE>(M, D, N, A_csr, B, D, C, D);
+      end = omp_get_wtime();
+      t1 = end-start;
+      fprintf(stdout, "Time SDMM (M=%d,N=%d,D=%d) = %e\n", M, N, D, t1); 
 
-  fprintf(stdout, "**** Speedup of register block verison of CSR_IKJ = %.2f\n", 
+      fprintf(stdout, "**** Speedup of register block verison of CSR_IKJ = %.2f\n", 
           t0/t1); 
 
 /*
- * Test the result  
+ *    Test the result  
  */
-   cout << "testing SDMM of resgister blocking... " << endl;
-   nerr = doTesting(A_csr.nnz, M, D, C0, C, D); 
-   if (!nerr)
-      fprintf(stdout, "PASSED TEST\n");
-   else
-      fprintf(stdout, "FAILED TEST, %d ELEMENTS\n", nerr);
+      cout << "testing SDMM of resgister blocking... " << endl;
+      nerr = doTesting(A_csr.nnz, M, D, C0, C, D); 
+      if (!nerr)
+         fprintf(stdout, "PASSED TEST\n");
+      else
+         fprintf(stdout, "FAILED TEST, %d ELEMENTS\n", nerr);
+   }
 
    //fprintf(stderr, "********** VLEN = %d\n", VLEN);  
 /*
  * CSC_KIJ 
  */
    cout << "Calling CSC_KIJ version ..." << endl;
-   start = omp_get_wtime(); 
 #if 0
    //SDMM_CSC_KIJ<INDEXTYPE, VALUETYPE>(M, D, N, A_csc, B, D, C1, D);
    SDMM_CSC_KIJ_D128<INDEXTYPE, VALUETYPE>(M, D, N, A_csc, B, D, C1, D);
 #else
    //SDMM_CSC_KIJ<INDEXTYPE, VALUETYPE>(M, D, N, A_Mcsc, B, D, C1, D);
-   SDMM_CSC_KIJ_D128<INDEXTYPE, VALUETYPE>(M, D, N, A_Mcsc, B, D, C1, D);
+   if (D == 128)
+   {
+      start = omp_get_wtime(); 
+      SDMM_CSC_KIJ_D128<INDEXTYPE, VALUETYPE>(M, D, N, A_Mcsc, B, D, C1, D); 
+      end = omp_get_wtime(); 
+   }
+   else
+   {
+      fprintf(stdout, "D != 128, calling rolled kernel!\n");
+      start = omp_get_wtime(); 
+      SDMM_CSC_KIJ<INDEXTYPE, VALUETYPE>(M, D, N, A_Mcsc, B, D, C1, D);
+      end = omp_get_wtime(); 
+   }
+
 #endif
-   end = omp_get_wtime(); 
    t2 = end-start; 
    fprintf(stdout, "Time SDMM (M=%d,N=%d,D=%d) = %e\n", M, N, D, t2); 
    fprintf(stdout, "**** Speedup of CSC_KIJ over CSR_IKJ = %.4f\n", t0/t2); 
@@ -603,15 +959,75 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M)
       fprintf(stdout, "FAILED TEST, %d ELEMENTS\n", nerr);
 
 }
+#else
+
+void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M, 
+      int csKB, int nrep)
+{
+   int nerr;
+   INDEXTYPE N; /* A->MxN, B-> NxD, C-> MxD */ 
+   double t0, t1, t2; 
+   CSR<INDEXTYPE, VALUETYPE> A_csr0; 
+   CSR<INDEXTYPE, VALUETYPE> A_csr1; 
+   CSC<INDEXTYPE, VALUETYPE> A_csc;
+   
+   //csr_kernel_t TRUSTED = Trusted_SDMM_CSR_IKJ; 
+   //csr_kernel_t TEST = SDMM_CSR_IKJ_D128; 
+
+   SetInputMatricesAsCSC(A_csc, inputfile);
+   A_csc.Sorted(); 
+
+   N = A_csc.cols; 
+   
+   if (!M || M > N)
+      M = N;
+   
+   // genetare CSR version of A  
+   A_csr0.make_empty(); 
+   A_csr0 = *(new CSR<INDEXTYPE, VALUETYPE>(A_csc));
+   A_csr0.Sorted();
+   
+   // copy constructor
+   A_csr1 = A_csr0;
+
+#if 0
+   t1 = doTiming_Acsr_CacheFlushing<SDMM_CSR_IKJ_D128>(A_csr1, M, N, D, csKB, 
+         nrep);
+   fprintf(stdout, "test time = %e\n", t1); 
+
+   t0 = doTiming_Acsr_CacheFlushing<Trusted_SDMM_CSR_IKJ>(A_csr0, M, N, D, csKB,
+         nrep);
+   fprintf(stdout, "Trusted time = %e\n", t0); 
+#else
+   t0 = doTiming_Acsr<Trusted_SDMM_CSR_IKJ>(A_csr0, M, N, D, csKB, nrep);
+   //fprintf(stdout, "trusted time = %e\n", t0); 
+   
+   //t1 = doTiming_Acsr<SDMM_CSR_IKJ_D128>(A_csr1, M, N, D, csKB, nrep);
+   t1 = doTiming_Acsr<SDMM_CSR_IKJ_D128_Aligned>(A_csr1, M, N, D, csKB, nrep);
+   //fprintf(stdout, "test time = %e\n", t1); 
+
+#endif
+
+   //fprintf(stdout, "Speedup = %.2f\n", t0/t1); 
+   
+   //fprintf(stdout, "Filename  \tNNZ \tM \tN \tD \ttrusted time \ttesttime  \tspeedup \n" );
+   //fprintf(stdout, "%s, \t%ld, \t%ld, \t%ld, \t%d, %e, %e, %.2f\n", 
+   //      inputfile, A_csr0.nnz, M, N, D, t0, t1, t0/t1);
+   cout << inputfile << ",\t" << A_csr0.nnz << ",\t" << M << ",\t" << N 
+        << ",\t" << D << ",\t" << t0 << ",\t" << t1 << "   ,\t" << t0/t1 << endl;
+
+
+   return;
+}
+#endif
 
 int main(int narg, char **argv)
 {
    INDEXTYPE D, M; 
-   int option;
+   int option, csKB, nrep;
    string inputfile; 
-   GetFlags(narg, argv, inputfile, option, D, M);
-   GetSpeedup(inputfile, option, D, M);
-
+   GetFlags(narg, argv, inputfile, option, D, M, csKB, nrep);
+   GetSpeedup(inputfile, option, D, M, csKB, nrep);
    return 0;
 }
 
