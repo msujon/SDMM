@@ -7,29 +7,82 @@
 #include "commonutility.h"
 #include "utility.h"
 
-#define DREAL 1 // must defined it before including simd.h... not effective otherwise 
-#include "simd.h"
-
 #define INDEXTYPE int
 #define VALUETYPE double 
+#define DREAL 1 
+/*
+ * NOTE: must defined type (e.g., DREAL) before including kernels.h 
+ */
+#include "kernels.h" 
+
 
 #if 0
-template<typename IT, typename NT>
-typedef void (*csr_kernel_t)(IT M, IT N, IT K, const CSR<IT, VALUETTYPE>&A, 
-      NT *B, IT rldb, NT *C, IT rldc); 
-
-template<typename IT, typename NT>
-typedef void (*csc_kernel_t)(IT M, IT N, IT K, const CSC<IT, VALUETTYPE>&A, 
-      NT *B, IT rldb, NT *C, IT rldc); 
-#else
-typedef void (*csr_kernel_t)(INDEXTYPE M, INDEXTYPE N, INDEXTYPE K, 
-      const CSR<INDEXTYPE, VALUETYPE>&A, VALUETYPE *B, INDEXTYPE rldb, 
-      VALUETYPE *C, INDEXTYPE rldc); 
-
-typedef void (*csc_kernel_t)(INDEXTYPE M, INDEXTYPE N, INDEXTYPE K, 
-      const CSC<INDEXTYPE, VALUETYPE>&A, VALUETYPE *B, INDEXTYPE rldb, 
-      VALUETYPE *C, INDEXTYPE rldc); 
+/*
+ * using mkl's function prototype as standard for our kernel
+ *    but not pointer for scalar!!! 
+ */
+void mkl_dcsrmm 
+(
+   const char *transa ,    // 'N', 'T' , 'C' 
+   const MKL_INT *m ,      // number of rows of A 
+   const MKL_INT *n ,      // number of cols of C
+   const MKL_INT *k ,      // number of cols of A
+   const double *alpha ,   // double scalar ?? why ptr 
+   const char *matdescra , // 6 characr array descriptor for A:
+                                 // [G/S/H/T/A/D],[L/U],[N/U],[F/C] -> [G,X,X,C] 
+   const double *val ,     // NNZ value  
+   const MKL_INT *indx ,   // colids -> column indices 
+   const MKL_INT *pntrb ,  // starting index for rowptr
+   const MKL_INT *pntre ,  // ending index for rowptr
+   const double *b ,       // Dense B matrix
+   const MKL_INT *ldb ,    // 2nd dimension of b for zero-based indexing, rowsz  
+   const double *beta ,    // double scalar beta[0] 
+   double *c ,             // Dense matrix c
+   const MKL_INT *ldc      // 2nd dimension of b 
+);
 #endif
+
+
+typedef void (*csr_mm_t) 
+(
+   const char *transa,     // 'N', 'T' , 'C' 
+   const INDEXTYPE *m,     // number of rows of A 
+   const INDEXTYPE *n,     // number of cols of C
+   const INDEXTYPE *k,     // number of cols of A
+   const VALUETYPE *alpha, // double scalar ?? why ptr 
+   const char *matdescra,  // 6 characr array descriptor for A:
+                           // [G/S/H/T/A/D],[L/U],[N/U],[F/C] -> [G,X,X,C] 
+   const VALUETYPE *val,   // NNZ value  
+   const INDEXTYPE *indx,  // colids -> column indices 
+   const INDEXTYPE *pntrb, // starting index for rowptr
+   const INDEXTYPE *pntre, // ending index for rowptr
+   const VALUETYPE *b,     // Dense B matrix
+   const INDEXTYPE *ldb,   // 2nd dimension of b for zero-based indexing  
+   const VALUETYPE *beta,  // double scalar beta[0] 
+   VALUETYPE *c,           // Dense matrix c
+   const INDEXTYPE *ldc    // 2nd dimension size of b 
+);
+
+typedef void (*csc_mm_t) 
+(
+   const char *transa,     // 'N', 'T' , 'C' 
+   const INDEXTYPE *m,     // number of rows of A 
+   const INDEXTYPE *n,     // number of cols of C
+   const INDEXTYPE *k,     // number of cols of A
+   const VALUETYPE *alpha, // double scalar ?? why ptr 
+   const char *matdescra,  // 6 characr array descriptor for A:
+                           // [G/S/H/T/A/D],[L/U],[N/U],[F/C] -> [G,X,X,C] 
+   const VALUETYPE *val,   // NNZ value  
+   const INDEXTYPE *indx,  // rowids -> row indices 
+   const INDEXTYPE *pntrb, // starting index for colptr
+   const INDEXTYPE *pntre, // ending index for colptr
+   const VALUETYPE *b,     // Dense B matrix
+   const INDEXTYPE *ldb,   // 2nd dimension of b for zero-based indexing  
+   const VALUETYPE *beta,  // double scalar beta[0] 
+   VALUETYPE *c,           // Dense matrix c
+   const INDEXTYPE *ldc    // 2nd dimension size of b 
+);
+
 /*
  * some misc definition: will move to another file later 
  *    from ATLAS 
@@ -102,17 +155,24 @@ void Usage()
    printf("\n");
    printf("Usage for CompAlgo:\n");
    printf("-input <string>, full path of input file (required).\n");
+   printf("-M <number>, rows of M (can be less than actual rows of A).\n");
+   printf("-D <number>, number of cols of B & C [range = 1 to 256] \n");
+   printf("-C <number>, Cachesize in KB to flush it for small workset \n");
+   printf("-nrep <number>, number of repeatation \n");
+   printf("-T <0,1>, 1 means, run tester as well  \n");
+   printf("-h, show this usage message  \n");
 
 }
 
 void GetFlags(int narg, char **argv, string &inputfile, int &option, 
-      INDEXTYPE &D, INDEXTYPE &M, int &csKB, int &nrep)
+      INDEXTYPE &D, INDEXTYPE &M, int &csKB, int &nrep, int &isTest)
 {
    option = 1; 
    inputfile = "";
    //D = 256; 
    D = 128; 
    M = 0;
+   isTest = 0; 
    nrep = 1;
    //csKB = 1024; // L2 in KB 
    csKB = 25344; // L3 in KB 
@@ -143,6 +203,10 @@ void GetFlags(int narg, char **argv, string &inputfile, int &option,
       {
 	 nrep = atoi(argv[p+1]);
       }
+      else if(strcmp(argv[p], "-T") == 0)
+      {
+	 isTest = atoi(argv[p+1]);
+      }
       else if(strcmp(argv[p], "-h") == 0)
       {
          Usage();
@@ -156,441 +220,6 @@ void GetFlags(int narg, char **argv, string &inputfile, int &option,
    }
 }
 
-/*
- * base implementation of Sparse-Dense Matrix Multiplication: CSR-IKJ 
- *    B, C matrix: row-major matrix 
- *    A: sparse matrix, CSR format 
- *    C = A*B + C
-         // AXPY ... can aply optimization for AXPY
-         
-          * make N (D) as compile time paramter... 
-          * unroll and vectorize j-loop ... 
-          *    for example, N=128, use 16 AVX512 register and use register blocking
-          
- */
-//template <typename IT, typename NT>
-void Trusted_SDMM_CSR_IKJ(INDEXTYPE M, INDEXTYPE N, INDEXTYPE K, const CSR<INDEXTYPE, VALUETYPE>& A, VALUETYPE *B, INDEXTYPE ldb,
-      VALUETYPE *C, INDEXTYPE ldc)
-{
-#if 0
-   cout << "Inside trusted kernel " << endl;
-#endif
-   for (INDEXTYPE i=0; i < M; i++)
-   {
-      INDEXTYPE ia0 = A.rowptr[i];
-      INDEXTYPE ia1 = A.rowptr[i+1]; 
-      for (INDEXTYPE k=ia0; k < ia1; k++)
-      {
-         VALUETYPE a0 = A.values[k];
-         INDEXTYPE ja0 = A.colids[k];
-         for (INDEXTYPE j=0; j < N; j++)
-            C[i*ldc+j] += a0 * B[ja0*ldb + j];  // row-major C  
-      }
-   }
-}
-
-void PrintVector(char*name, VTYPE v)
-{
-   int i;
-#ifdef DREAL 
-   double *fptr = (double*) &v;
-#else
-   float *fptr = (float*) &v;
-#endif
-   fprintf(stdout, "vector-%s: < ", name);
-   for (i=0; i < VLEN; i++)
-      fprintf(stdout, "%lf, ", fptr[i]);
-   fprintf(stdout, ">\n");
-}
-
-
-void SDMM_CSR_IKJ_D128(INDEXTYPE M, INDEXTYPE N, INDEXTYPE K, 
-      const CSR<INDEXTYPE, VALUETYPE>& A, VALUETYPE *B, INDEXTYPE ldb,
-      VALUETYPE *C, INDEXTYPE ldc)
-{
-
-   for (INDEXTYPE i=0; i < M; i++)
-   {
-      INDEXTYPE ia0 = A.rowptr[i];
-      INDEXTYPE ia1 = A.rowptr[i+1]; 
-/*
- *    register block both B and C  
- */
-      VTYPE VC0, VC1, VC2, VC3, VC4, VC5, VC6, VC7, 
-            VC8, VC9, VC10, VC11, VC12, VC13, VC14, VC15; 
-/*
- *    D=128:  AVXZ: #8 VALUETYPE
- *       128/8 = 16 
- */
-   #if 0
-         fprintf(stdout, "--- before c[%d,0]= %f \n", i, C[i*ldc]);
-   #endif
-      BCL_vldu(VC0, C+i*ldc+VLEN*0); 
-      BCL_vldu(VC1, C+i*ldc+VLEN*1); 
-      BCL_vldu(VC2, C+i*ldc+VLEN*2); 
-      BCL_vldu(VC3, C+i*ldc+VLEN*3); 
-      BCL_vldu(VC4, C+i*ldc+VLEN*4); 
-      BCL_vldu(VC5, C+i*ldc+VLEN*5); 
-      BCL_vldu(VC6, C+i*ldc+VLEN*6); 
-      BCL_vldu(VC7, C+i*ldc+VLEN*7); 
-      BCL_vldu(VC8, C+i*ldc+VLEN*8); 
-      BCL_vldu(VC9, C+i*ldc+VLEN*9); 
-      BCL_vldu(VC10, C+i*ldc+VLEN*10); 
-      BCL_vldu(VC11, C+i*ldc+VLEN*11); 
-      BCL_vldu(VC12, C+i*ldc+VLEN*12); 
-      BCL_vldu(VC13, C+i*ldc+VLEN*13); 
-      BCL_vldu(VC14, C+i*ldc+VLEN*14); 
-      BCL_vldu(VC15, C+i*ldc+VLEN*15); 
-
-      for (INDEXTYPE k=ia0; k < ia1; k++)
-      {
-         VTYPE VB0, VB1, VB2, VB3, VB4, VB5, VB6, VB7, 
-            VB8, VB9, VB10, VB11, VB12, VB13, VB14, VB15; 
-         VTYPE VA0; 
-         VALUETYPE a0 = A.values[k];
-         INDEXTYPE ja0 = A.colids[k];
-      #if 0
-         for (INDEXTYPE j=0; j < N; j++)
-            C[i*ldc+j] += a0 * B[ja0*ldb + j];  // row-major C  
-      #else
-         
-         BCL_vset1(VA0, a0);
-
-         BCL_vldu(VB0, B+ja0*ldb+VLEN*0); 
-         BCL_vldu(VB1, B+ja0*ldb+VLEN*1); 
-         BCL_vldu(VB2, B+ja0*ldb+VLEN*2); 
-         BCL_vldu(VB3, B+ja0*ldb+VLEN*3); 
-         BCL_vldu(VB4, B+ja0*ldb+VLEN*4); 
-         BCL_vldu(VB5, B+ja0*ldb+VLEN*5); 
-         BCL_vldu(VB6, B+ja0*ldb+VLEN*6); 
-         BCL_vldu(VB7, B+ja0*ldb+VLEN*7); 
-         BCL_vldu(VB8, B+ja0*ldb+VLEN*8); 
-         BCL_vldu(VB9, B+ja0*ldb+VLEN*9); 
-         BCL_vldu(VB10, B+ja0*ldb+VLEN*10); 
-         BCL_vldu(VB11, B+ja0*ldb+VLEN*11); 
-         BCL_vldu(VB12, B+ja0*ldb+VLEN*12); 
-         BCL_vldu(VB13, B+ja0*ldb+VLEN*13); 
-         BCL_vldu(VB14, B+ja0*ldb+VLEN*14); 
-         BCL_vldu(VB15, B+ja0*ldb+VLEN*15); 
-        
-         BCL_vmac(VC0, VA0, VB0); 
-         BCL_vmac(VC1, VA0, VB1); 
-         BCL_vmac(VC2, VA0, VB2); 
-         BCL_vmac(VC3, VA0, VB3); 
-         BCL_vmac(VC4, VA0, VB4); 
-         BCL_vmac(VC5, VA0, VB5); 
-         BCL_vmac(VC6, VA0, VB6); 
-         BCL_vmac(VC7, VA0, VB7); 
-         BCL_vmac(VC8, VA0, VB8); 
-         BCL_vmac(VC9, VA0, VB9); 
-         BCL_vmac(VC10, VA0, VB10); 
-         BCL_vmac(VC11, VA0, VB11); 
-         BCL_vmac(VC12, VA0, VB12); 
-         BCL_vmac(VC13, VA0, VB13); 
-         BCL_vmac(VC14, VA0, VB14);
-         BCL_vmac(VC15, VA0, VB15); 
-      #endif
-   #if 0
-         fprintf(stdout, "---a0= %f ", a0);
-         fprintf(stdout, "b0= %f ", B[ja0*ldb]);
-         PrintVector("VA0", VA0);
-         PrintVector("VB0", VB0);
-         PrintVector("VC0", VC0);
-   #endif
-      }
-      BCL_vstu(C+i*ldc+VLEN*0, VC0); 
-      BCL_vstu(C+i*ldc+VLEN*1, VC1); 
-      BCL_vstu(C+i*ldc+VLEN*2, VC2); 
-      BCL_vstu(C+i*ldc+VLEN*3, VC3); 
-      BCL_vstu(C+i*ldc+VLEN*4, VC4); 
-      BCL_vstu(C+i*ldc+VLEN*5, VC5); 
-      BCL_vstu(C+i*ldc+VLEN*6, VC6); 
-      BCL_vstu(C+i*ldc+VLEN*7, VC7); 
-      BCL_vstu(C+i*ldc+VLEN*8, VC8); 
-      BCL_vstu(C+i*ldc+VLEN*9, VC9); 
-      BCL_vstu(C+i*ldc+VLEN*10, VC10); 
-      BCL_vstu(C+i*ldc+VLEN*11, VC11); 
-      BCL_vstu(C+i*ldc+VLEN*12, VC12); 
-      BCL_vstu(C+i*ldc+VLEN*13, VC13); 
-      BCL_vstu(C+i*ldc+VLEN*14, VC14); 
-      BCL_vstu(C+i*ldc+VLEN*15, VC15); 
-   #if 0
-         fprintf(stdout, "c0= %f \n", C[i*ldc]);
-   #endif
-   }
-
-}
-
-void SDMM_CSR_IKJ_D128_Aligned(INDEXTYPE M, INDEXTYPE N, INDEXTYPE K, 
-      const CSR<INDEXTYPE, VALUETYPE>& A, VALUETYPE *B, INDEXTYPE ldb,
-      VALUETYPE *C, INDEXTYPE ldc)
-{
-
-   for (INDEXTYPE i=0; i < M; i++)
-   {
-      INDEXTYPE ia0 = A.rowptr[i];
-      INDEXTYPE ia1 = A.rowptr[i+1]; 
-/*
- *    register block both B and C  
- */
-      VTYPE VC0, VC1, VC2, VC3, VC4, VC5, VC6, VC7, 
-            VC8, VC9, VC10, VC11, VC12, VC13, VC14, VC15; 
-/*
- *    D=128:  AVXZ: #8 VALUETYPE
- *       128/8 = 16 
- */
-   #if 0
-         fprintf(stdout, "--- before c[%d,0]= %f \n", i, C[i*ldc]);
-   #endif
-      BCL_vld(VC0, C+i*ldc+VLEN*0); 
-      BCL_vld(VC1, C+i*ldc+VLEN*1); 
-      BCL_vld(VC2, C+i*ldc+VLEN*2); 
-      BCL_vld(VC3, C+i*ldc+VLEN*3); 
-      BCL_vld(VC4, C+i*ldc+VLEN*4); 
-      BCL_vld(VC5, C+i*ldc+VLEN*5); 
-      BCL_vld(VC6, C+i*ldc+VLEN*6); 
-      BCL_vld(VC7, C+i*ldc+VLEN*7); 
-      BCL_vld(VC8, C+i*ldc+VLEN*8); 
-      BCL_vld(VC9, C+i*ldc+VLEN*9); 
-      BCL_vld(VC10, C+i*ldc+VLEN*10); 
-      BCL_vld(VC11, C+i*ldc+VLEN*11); 
-      BCL_vld(VC12, C+i*ldc+VLEN*12); 
-      BCL_vld(VC13, C+i*ldc+VLEN*13); 
-      BCL_vld(VC14, C+i*ldc+VLEN*14); 
-      BCL_vld(VC15, C+i*ldc+VLEN*15); 
-
-      for (INDEXTYPE k=ia0; k < ia1; k++)
-      {
-         VTYPE VB0, VB1, VB2, VB3, VB4, VB5, VB6, VB7, 
-            VB8, VB9, VB10, VB11, VB12, VB13, VB14, VB15; 
-         VTYPE VA0; 
-         VALUETYPE a0 = A.values[k];
-         INDEXTYPE ja0 = A.colids[k];
-      #if 0
-         for (INDEXTYPE j=0; j < N; j++)
-            C[i*ldc+j] += a0 * B[ja0*ldb + j];  // row-major C  
-      #else
-         
-         BCL_vset1(VA0, a0);
-
-         BCL_vld(VB0, B+ja0*ldb+VLEN*0); 
-         BCL_vld(VB1, B+ja0*ldb+VLEN*1); 
-         BCL_vld(VB2, B+ja0*ldb+VLEN*2); 
-         BCL_vld(VB3, B+ja0*ldb+VLEN*3); 
-         BCL_vld(VB4, B+ja0*ldb+VLEN*4); 
-         BCL_vld(VB5, B+ja0*ldb+VLEN*5); 
-         BCL_vld(VB6, B+ja0*ldb+VLEN*6); 
-         BCL_vld(VB7, B+ja0*ldb+VLEN*7); 
-         BCL_vld(VB8, B+ja0*ldb+VLEN*8); 
-         BCL_vld(VB9, B+ja0*ldb+VLEN*9); 
-         BCL_vld(VB10, B+ja0*ldb+VLEN*10); 
-         BCL_vld(VB11, B+ja0*ldb+VLEN*11); 
-         BCL_vld(VB12, B+ja0*ldb+VLEN*12); 
-         BCL_vld(VB13, B+ja0*ldb+VLEN*13); 
-         BCL_vld(VB14, B+ja0*ldb+VLEN*14); 
-         BCL_vld(VB15, B+ja0*ldb+VLEN*15); 
-       
-         BCL_vmac(VC0, VA0, VB0); 
-         BCL_vmac(VC1, VA0, VB1); 
-         BCL_vmac(VC2, VA0, VB2); 
-         BCL_vmac(VC3, VA0, VB3); 
-         BCL_vmac(VC4, VA0, VB4); 
-         BCL_vmac(VC5, VA0, VB5); 
-         BCL_vmac(VC6, VA0, VB6); 
-         BCL_vmac(VC7, VA0, VB7); 
-         BCL_vmac(VC8, VA0, VB8); 
-         BCL_vmac(VC9, VA0, VB9); 
-         BCL_vmac(VC10, VA0, VB10); 
-         BCL_vmac(VC11, VA0, VB11); 
-         BCL_vmac(VC12, VA0, VB12); 
-         BCL_vmac(VC13, VA0, VB13); 
-         BCL_vmac(VC14, VA0, VB14);
-         BCL_vmac(VC15, VA0, VB15); 
-      #endif
-      }
-      BCL_vst(C+i*ldc+VLEN*0, VC0); 
-      BCL_vst(C+i*ldc+VLEN*1, VC1); 
-      BCL_vst(C+i*ldc+VLEN*2, VC2); 
-      BCL_vst(C+i*ldc+VLEN*3, VC3); 
-      BCL_vst(C+i*ldc+VLEN*4, VC4); 
-      BCL_vst(C+i*ldc+VLEN*5, VC5); 
-      BCL_vst(C+i*ldc+VLEN*6, VC6); 
-      BCL_vst(C+i*ldc+VLEN*7, VC7); 
-      BCL_vst(C+i*ldc+VLEN*8, VC8); 
-      BCL_vst(C+i*ldc+VLEN*9, VC9); 
-      BCL_vst(C+i*ldc+VLEN*10, VC10); 
-      BCL_vst(C+i*ldc+VLEN*11, VC11); 
-      BCL_vst(C+i*ldc+VLEN*12, VC12); 
-      BCL_vst(C+i*ldc+VLEN*13, VC13); 
-      BCL_vst(C+i*ldc+VLEN*14, VC14); 
-      BCL_vst(C+i*ldc+VLEN*15, VC15); 
-   }
-}
-#if 0
-/*
- *    NOTE: need to consider dynamic blocking later 
- */
-template <typename IT, typename NT>
-void Test_SDMM_CSR_IKJ_BK_BM
-(
- IT M, 
- IT N, 
- IT K, 
- IT BM,  /* blocking factor along M direction */
- IT BK,  /* blocking factor along K dimension */
- const CSR<IT, NT>& A, 
- NT *B, 
- IT ldb,
- NT *C, 
- IT ldc)
-{
-/*
- * Main Idea: unroll in M dimension and sort access of B... 
- *    a. it will regularize B access with the cost of irregular C write 
- */
-   // just started working with it 
-   for (IT i=0; i < M; i++)
-   {
-      IT ia0 = A.rowptr[i];
-      IT ia1 = A.rowptr[i+1]; 
-      for (IT k=ia0; k < ia1; k++)
-      {
-         NT a0 = A.values[k];
-         IT ja0 = A.colids[k];
-         for (IT j=0; j < N; j++)
-            C[i*ldc+j] += a0 * B[ja0*ldb + j];  // row-major C  
-      }
-   }
-}
-#endif
-
-/*============================================================================
- * CSC_KIJ 
- *============================================================================*/
-   
-template <typename IT, typename NT>
-void SDMM_CSC_KIJ(IT M, IT N, IT K, const CSC<IT, NT>& A, NT *B, IT ldb,
-      NT *C, IT ldc)
-{
-   for (IT k=0; k < K; k++)
-   {
-      IT ja0 = A.colptr[k];
-      IT ja1 = A.colptr[k+1]; 
-      for (IT i=ja0; i < ja1; i++)
-      {
-         NT a0 = A.values[i];
-         IT ia0 = A.rowids[i];
-   #if 0
-         if (ia0 >= M)
-            break;
-   #endif
-         for (IT j=0; j < N; j++)
-            C[ia0*ldc+j] += a0 * B[k*ldb + j];  // row-major C  
-      }
-   }
-}
-
-/*
- * CSC_KIJ:  Register blocking  
- */
-   
-template <typename IT, typename NT>
-void SDMM_CSC_KIJ_D128(IT M, IT N, IT K, const CSC<IT, NT>& A, NT *B, IT ldb,
-      NT *C, IT ldc)
-{
-   for (IT k=0; k < K; k++)
-   {
-      VTYPE VB0, VB1, VB2, VB3, VB4, VB5, VB6, VB7, 
-            VB8, VB9, VB10, VB11, VB12, VB13, VB14, VB15; 
-      IT ja0 = A.colptr[k];
-      IT ja1 = A.colptr[k+1]; 
-
-         BCL_vldu(VB0, B+k*ldb+VLEN*0); 
-         BCL_vldu(VB1, B+k*ldb+VLEN*1); 
-         BCL_vldu(VB2, B+k*ldb+VLEN*2); 
-         BCL_vldu(VB3, B+k*ldb+VLEN*3); 
-         BCL_vldu(VB4, B+k*ldb+VLEN*4); 
-         BCL_vldu(VB5, B+k*ldb+VLEN*5); 
-         BCL_vldu(VB6, B+k*ldb+VLEN*6); 
-         BCL_vldu(VB7, B+k*ldb+VLEN*7); 
-         BCL_vldu(VB8, B+k*ldb+VLEN*8); 
-         BCL_vldu(VB9, B+k*ldb+VLEN*9); 
-         BCL_vldu(VB10, B+k*ldb+VLEN*10); 
-         BCL_vldu(VB11, B+k*ldb+VLEN*11); 
-         BCL_vldu(VB12, B+k*ldb+VLEN*12); 
-         BCL_vldu(VB13, B+k*ldb+VLEN*13); 
-         BCL_vldu(VB14, B+k*ldb+VLEN*14); 
-         BCL_vldu(VB15, B+k*ldb+VLEN*15); 
-
-      for (IT i=ja0; i < ja1; i++)
-      {
-         VTYPE VC0, VC1, VC2, VC3, VC4, VC5, VC6, VC7, 
-               VC8, VC9, VC10, VC11, VC12, VC13, VC14, VC15; 
-         VTYPE VA0; 
-         
-         NT a0 = A.values[i];
-         IT ia0 = A.rowids[i];
-      #if 0 
-         if (ia0 >= M) break; 
-      #endif
-         BCL_vset1(VA0, a0);
-      #if 0
-         for (IT j=0; j < N; j++)
-            C[ia0*ldc+j] += a0 * B[k*ldb + j];  // row-major C  
-      #endif
-         BCL_vldu(VC0, C+ia0*ldc+VLEN*0); 
-         BCL_vldu(VC1, C+ia0*ldc+VLEN*1); 
-         BCL_vldu(VC2, C+ia0*ldc+VLEN*2); 
-         BCL_vldu(VC3, C+ia0*ldc+VLEN*3); 
-         BCL_vldu(VC4, C+ia0*ldc+VLEN*4); 
-         BCL_vldu(VC5, C+ia0*ldc+VLEN*5); 
-         BCL_vldu(VC6, C+ia0*ldc+VLEN*6); 
-         BCL_vldu(VC7, C+ia0*ldc+VLEN*7); 
-         BCL_vldu(VC8, C+ia0*ldc+VLEN*8); 
-         BCL_vldu(VC9, C+ia0*ldc+VLEN*9); 
-         BCL_vldu(VC10, C+ia0*ldc+VLEN*10); 
-         BCL_vldu(VC11, C+ia0*ldc+VLEN*11); 
-         BCL_vldu(VC12, C+ia0*ldc+VLEN*12); 
-         BCL_vldu(VC13, C+ia0*ldc+VLEN*13); 
-         BCL_vldu(VC14, C+ia0*ldc+VLEN*14); 
-         BCL_vldu(VC15, C+ia0*ldc+VLEN*15); 
-         
-         BCL_vmac(VC0, VA0, VB0); 
-         BCL_vmac(VC1, VA0, VB1); 
-         BCL_vmac(VC2, VA0, VB2); 
-         BCL_vmac(VC3, VA0, VB3); 
-         BCL_vmac(VC4, VA0, VB4); 
-         BCL_vmac(VC5, VA0, VB5); 
-         BCL_vmac(VC6, VA0, VB6); 
-         BCL_vmac(VC7, VA0, VB7); 
-         BCL_vmac(VC8, VA0, VB8); 
-         BCL_vmac(VC9, VA0, VB9); 
-         BCL_vmac(VC10, VA0, VB10); 
-         BCL_vmac(VC11, VA0, VB11); 
-         BCL_vmac(VC12, VA0, VB12); 
-         BCL_vmac(VC13, VA0, VB13); 
-         BCL_vmac(VC14, VA0, VB14);
-         BCL_vmac(VC15, VA0, VB15); 
-      
-         BCL_vstu(C+ia0*ldc+VLEN*0, VC0); 
-         BCL_vstu(C+ia0*ldc+VLEN*1, VC1); 
-         BCL_vstu(C+ia0*ldc+VLEN*2, VC2); 
-         BCL_vstu(C+ia0*ldc+VLEN*3, VC3); 
-         BCL_vstu(C+ia0*ldc+VLEN*4, VC4); 
-         BCL_vstu(C+ia0*ldc+VLEN*5, VC5); 
-         BCL_vstu(C+ia0*ldc+VLEN*6, VC6); 
-         BCL_vstu(C+ia0*ldc+VLEN*7, VC7); 
-         BCL_vstu(C+ia0*ldc+VLEN*8, VC8); 
-         BCL_vstu(C+ia0*ldc+VLEN*9, VC9); 
-         BCL_vstu(C+ia0*ldc+VLEN*10, VC10); 
-         BCL_vstu(C+ia0*ldc+VLEN*11, VC11); 
-         BCL_vstu(C+ia0*ldc+VLEN*12, VC12); 
-         BCL_vstu(C+ia0*ldc+VLEN*13, VC13); 
-         BCL_vstu(C+ia0*ldc+VLEN*14, VC14); 
-         BCL_vstu(C+ia0*ldc+VLEN*15, VC15); 
-      }
-   }
-}
 
 // from ATLAS;s ATL_epsilon.c 
 template <typename NT> 
@@ -611,7 +240,7 @@ NT Epsilon(void)
 }
 
 template <typename IT, typename NT>
-int doTesting(IT NNZA, IT M, IT N, NT *C, NT *D, IT ldc)
+int doChecking(IT NNZA, IT M, IT N, NT *C, NT *D, IT ldc)
 {
    IT i, j, k;
    NT diff, EPS; 
@@ -622,8 +251,8 @@ int doTesting(IT NNZA, IT M, IT N, NT *C, NT *D, IT ldc)
  * Error bound : computation M*NNZ FMAC
  *
  */
-   EPS = Epsilon<VALUETYPE>();
-   cout << "--- EPS = " << EPS << endl; 
+   EPS = Epsilon<NT>();
+   //cout << "--- EPS = " << EPS << endl; 
    // the idea is how many flop one element needs 
    ErrBound = 2 * (NNZA/N) * EPS; 
    //cout << "--- ErrBound = " << ErrBound << " NNZ(A) = " << NNZA 
@@ -660,6 +289,62 @@ int doTesting(IT NNZA, IT M, IT N, NT *C, NT *D, IT ldc)
    
    return(nerr);
 }
+
+template <typename IT, typename NT, csr_kernel_t trusted, csr_kernel_t test>
+int doTesting_Acsr(CSR<IT, NT> &A, IT M, IT N, IT D)
+{
+   int nerr; 
+   size_t szB, szC; 
+   VALUETYPE *pb, *b, *pc0, *c0, *pc, *c;
+      
+   std::default_random_engine generator;
+   std::uniform_real_distribution<double> distribution(0.0,1.0);
+      
+   VALUETYPE beta[1] = {1.0};
+   VALUETYPE alpha[1] = {1.0};
+      
+   szB = ((N*D+VLEN-1)/VLEN)*VLEN;  // szB in element
+   szC = ((M*D+VLEN-1)/VLEN)*VLEN;  // szC in element 
+      
+   pb = (VALUETYPE*)malloc(szB*sizeof(VALUETYPE)+ATL_Cachelen);
+   assert(pb);
+   b = (VALUETYPE*) ATL_AlignPtr(pb);
+   
+   pc0 = (VALUETYPE*)malloc(szC*sizeof(VALUETYPE)+ATL_Cachelen);
+   assert(pc0);
+   c0 = (VALUETYPE*) ATL_AlignPtr(pc); 
+      
+   pc = (VALUETYPE*)malloc(szC*sizeof(VALUETYPE)+ATL_Cachelen);
+   assert(pc);
+   c = (VALUETYPE*) ATL_AlignPtr(pc); 
+   
+   // init    
+   for (i=0; i < szB; i++)
+   #if 1
+      b[i] = distribution(generator);  
+   #else
+      b[i] = 1.0*i;  
+   #endif
+   for (i=0; i < szC; i++)
+   #if 1
+      c[i] = c0[i] = distribution(generator);  
+   #else
+      c[i] = 0;
+   #endif
+      
+   trusted('N', M, N, D, alpha, "GXXC", A.val, A.colids, 
+            A.rowptr[0], A.rowptr[1], b, D, beta, c0, D);   
+
+   test('N', M, N, D, alpha, "GXXC", A.val, A.colids, 
+            A.rowptr[0], A.rowptr[1], b, D, beta, c0, D);  
+
+   nerr = doChecking<IT, NT>(A.nnz, M, N, D, c0, c, D);
+   
+   return(nerr);
+}
+
+
+
 /*
  * NOTE: 
  * FIXME: When we want to run timer multiple times to average it out, we need to
@@ -798,171 +483,8 @@ double doTiming_Acsr
    return((end-start)/((double)nrep));
 }
 
-
-
-#if 0
-void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M, int csKB)
-{
-/*
- * get the input matrix as CSR format 
- */
-   int nerr;
-   INDEXTYPE N; /* A->MxN, B-> NxD, C-> MxD */ 
-   double start, end, t0, t1, t2; 
-   CSR<INDEXTYPE, VALUETYPE> A_csr; 
-   CSC<INDEXTYPE, VALUETYPE> A_csc; 
-
-   std::default_random_engine generator;
-   std::uniform_real_distribution<double> distribution(0.0,1.0);
-
-   SetInputMatricesAsCSC(A_csc, inputfile);
-   A_csc.Sorted(); 
-
-   N = A_csc.cols; 
-   if (!M || M > N)
-      M = N;
-/*
- * convert full A_csc to A_Mcsc 
- */
-   CSC<INDEXTYPE, VALUETYPE> A_Mcsc(A_csc.nnz, A_csc.rows, A_csc.cols, A_csc.nnz); // copying all, not efficient
-   ConvertMNcsc2NNcsc(M, A_csc, A_Mcsc);
-#if 0
-   printCSC(A_csc);
-#endif
-   // genetare CSR version of A  
-   //SetInputMatricesAsCSR(A_csr, inputfile);
-   A_csr.make_empty(); 
-   A_csr = *(new CSR<INDEXTYPE, VALUETYPE>(A_csc));
-   A_csr.Sorted();
-
-   //N = A_csr.rows; 
-
-
-#if 0
-   cout << "CSR Info: " << endl;
-   cout << "Rows = " << A_csr.rows << " Cols = " << A_csr.cols << " nnz = " 
-        << A_csr.nnz << endl;
-#endif
-#if 1
-   cout << "(M,N,D) = " << M << " , "<< N << " , " << D <<endl; 
-#endif
-/*
- * generate row-major matrix:
- *    B -> NxD, C->NxD  
- */
-#if 0
-   VALUETYPE *B = my_malloc<VALUETYPE>(N*D);
-   VALUETYPE *C0 = my_malloc<VALUETYPE>(N*D);
-   VALUETYPE *C = my_malloc<VALUETYPE>(N*D);
-#else
-   VALUETYPE *B = (VALUETYPE*) malloc(sizeof(VALUETYPE)*N*D);
-   
-   VALUETYPE *C = (VALUETYPE*)malloc(sizeof(VALUETYPE)*M*D);
-   VALUETYPE *C0 = (VALUETYPE*)malloc(sizeof(VALUETYPE)*M*D);
-   VALUETYPE *C1 = (VALUETYPE*)malloc(sizeof(VALUETYPE)*M*D);
-
-   assert(B && C0 && C && C1);
-#endif
-/*
- * init dense matrix 
- */
-   cout << "intializing dense matrix ..." << endl;
-   for (INDEXTYPE i=0; i < N*D; i++)
-   {
-   #if 1
-      B[i] = distribution(generator);  
-   #else
-      B[i] = 0.5; 
-   #endif
-   }
-   for (INDEXTYPE i=0; i < M*D; i++)
-      C[i] = C0[i] = 0.0;  // init with 0
-
-
-/*
- * Need some kind of cache flushing 
- */
-  
-/*
- * will call robust timer later, for now just time it 
- */
-   cout << "calling trusted SDMM first ... " << endl;
-   start = omp_get_wtime(); 
-   Trusted_SDMM_CSR_IKJ<INDEXTYPE, VALUETYPE>(M, D, N, A_csr, B, D, C0, D);
-   end = omp_get_wtime(); 
-   t0 = end-start; 
-   fprintf(stdout, "Time SDMM (M=%d,N=%d,D=%d) = %e\n", M, N, D, t0); 
-
-/*
- *    just rough timing.... need a timer considering cache flusing 
- */
-   if (D == 128) // intrinsic code only for D=128 for testing now 
-   {
-      cout << "calling test SDMM first ... " << endl;
-      start = omp_get_wtime(); 
-      Test_SDMM_CSR_IKJ_D128<INDEXTYPE, VALUETYPE>(M, D, N, A_csr, B, D, C, D);
-      end = omp_get_wtime();
-      t1 = end-start;
-      fprintf(stdout, "Time SDMM (M=%d,N=%d,D=%d) = %e\n", M, N, D, t1); 
-
-      fprintf(stdout, "**** Speedup of register block verison of CSR_IKJ = %.2f\n", 
-          t0/t1); 
-
-/*
- *    Test the result  
- */
-      cout << "testing SDMM of resgister blocking... " << endl;
-      nerr = doTesting(A_csr.nnz, M, D, C0, C, D); 
-      if (!nerr)
-         fprintf(stdout, "PASSED TEST\n");
-      else
-         fprintf(stdout, "FAILED TEST, %d ELEMENTS\n", nerr);
-   }
-
-   //fprintf(stderr, "********** VLEN = %d\n", VLEN);  
-/*
- * CSC_KIJ 
- */
-   cout << "Calling CSC_KIJ version ..." << endl;
-#if 0
-   //SDMM_CSC_KIJ<INDEXTYPE, VALUETYPE>(M, D, N, A_csc, B, D, C1, D);
-   SDMM_CSC_KIJ_D128<INDEXTYPE, VALUETYPE>(M, D, N, A_csc, B, D, C1, D);
-#else
-   //SDMM_CSC_KIJ<INDEXTYPE, VALUETYPE>(M, D, N, A_Mcsc, B, D, C1, D);
-   if (D == 128)
-   {
-      start = omp_get_wtime(); 
-      SDMM_CSC_KIJ_D128<INDEXTYPE, VALUETYPE>(M, D, N, A_Mcsc, B, D, C1, D); 
-      end = omp_get_wtime(); 
-   }
-   else
-   {
-      fprintf(stdout, "D != 128, calling rolled kernel!\n");
-      start = omp_get_wtime(); 
-      SDMM_CSC_KIJ<INDEXTYPE, VALUETYPE>(M, D, N, A_Mcsc, B, D, C1, D);
-      end = omp_get_wtime(); 
-   }
-
-#endif
-   t2 = end-start; 
-   fprintf(stdout, "Time SDMM (M=%d,N=%d,D=%d) = %e\n", M, N, D, t2); 
-   fprintf(stdout, "**** Speedup of CSC_KIJ over CSR_IKJ = %.4f\n", t0/t2); 
-
-/*
- * Test the result  
- */
-   cout << "testing SDMM of CSC_KIJ... " << endl;
-   nerr = doTesting(A_csr.nnz, M, D, C0, C1, D); 
-   if (!nerr)
-      fprintf(stdout, "PASSED TEST\n");
-   else
-      fprintf(stdout, "FAILED TEST, %d ELEMENTS\n", nerr);
-
-}
-#else
-
 void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M, 
-      int csKB, int nrep)
+      int csKB, int nrep, int isTest)
 {
    int nerr;
    INDEXTYPE N; /* A->MxN, B-> NxD, C-> MxD */ 
@@ -990,6 +512,22 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
    // copy constructor
    A_csr1 = A_csr0;
 
+/*
+ * test the result if mandated 
+ */
+   if (isTest)
+   {
+      nerr = doTesting_Acse<INDEXTYPE,VALUETYPE, Trusted_SDMM_CSR_IKJ>(A_csr0, 
+            M, N, D); 
+      if (!nerr)
+         fprintf(stdout, "PASSED TEST\n");
+      else
+      {
+         fprintf(stdout, "FAILED TEST, %d ELEMENTS\n", nerr);
+         exit(1); // test failed, not timed 
+      }
+   }
+
 #if 0
    t1 = doTiming_Acsr_CacheFlushing<SDMM_CSR_IKJ_D128>(A_csr1, M, N, D, csKB, 
          nrep);
@@ -1015,19 +553,15 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
    //      inputfile, A_csr0.nnz, M, N, D, t0, t1, t0/t1);
    cout << inputfile << ",\t" << A_csr0.nnz << ",\t" << M << ",\t" << N 
         << ",\t" << D << ",\t" << t0 << ",\t" << t1 << "   ,\t" << t0/t1 << endl;
-
-
-   return;
 }
-#endif
 
 int main(int narg, char **argv)
 {
-   INDEXTYPE D, M; 
+   INDEXTYPE D, M, isTest; 
    int option, csKB, nrep;
    string inputfile; 
-   GetFlags(narg, argv, inputfile, option, D, M, csKB, nrep);
-   GetSpeedup(inputfile, option, D, M, csKB, nrep);
+   GetFlags(narg, argv, inputfile, option, D, M, csKB, nrep, isTest);
+   GetSpeedup(inputfile, option, D, M, csKB, nrep, isTest);
    return 0;
 }
 

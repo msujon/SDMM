@@ -7,6 +7,8 @@
 
 #define READBUFFER (512 * 1024 * 1024)  // in MB
 
+//#define PRINTMSG 1
+
 template <typename IT, typename NT>
 int ReadBinary(string filename, CSC<IT,NT> & csc)
 {
@@ -27,8 +29,9 @@ int ReadBinary(string filename, CSC<IT,NT> & csc)
         return -1;
     }
     double start = omp_get_wtime( );
+#ifdef PRINTMSG
     cout << "Reading matrix with dimensions: "<< m << "-by-" << n <<" having "<< nnz << " nonzeros" << endl;
-    
+#endif    
     IT * rowindices = new IT[nnz];
     IT * colindices = new IT[nnz];
     NT * vals = new NT[nnz];
@@ -43,9 +46,11 @@ int ReadBinary(string filename, CSC<IT,NT> & csc)
         return -1;
     }
     double end = omp_get_wtime( );
+
+#ifdef PRINTMSG
     // printf("start = %.16g\nend = %.16g\ndiff = %.16g\n", start, end, end - start);
     printf("Converting matrix data from binary to COO fromat takes %.16g seconds.\n", end - start);
-
+#endif
     fclose(f);
     
     csc = *(new CSC<IT,NT>(rowindices, colindices, vals , nnz, m, n));
@@ -69,7 +74,9 @@ int ReadASCII(string filename, CSC<IT,NT> & csc)
         infile.getline(line,256);
         if (strstr(line, "symmetric")) {
             isSymmetric = true;
+         #ifdef PRINTMSG
             cout << "Matrix is symmetric" << endl;
+         #endif
         }
         c = infile.get();
     }
@@ -104,10 +111,7 @@ int ReadASCII(string filename, CSC<IT,NT> & csc)
             ch++;
             triples[cnz].col = (IT)(atoi(ch));
             ch = strchr(ch, ' ');
-            
-	    //added by khaled to avoid self loop
-		
-	    if (ch != NULL) {
+            if (ch != NULL) {
                 ch++;
                 /* Read third word (value data)*/
                 triples[cnz].val = (NT)(atoi(ch));
@@ -120,34 +124,29 @@ int ReadASCII(string filename, CSC<IT,NT> & csc)
             triples[cnz].row--;
             triples[cnz].col--;
             if (isSymmetric) {
-                //printf("%d, %d\n", triples[cnz].col, triples[cnz].row);
-		if (triples[cnz].col != triples[cnz].row) {
+                if (triples[cnz].col != triples[cnz].row) {
                     cnz++;
                     triples[cnz].col = triples[cnz - 1].row;
                     triples[cnz].row = triples[cnz - 1].col;
                     triples[cnz].val = triples[cnz - 1].val;
                 }
-		//added by khaled to avoid self-loop
-		else if(triples[cnz].col == triples[cnz].row){
-			nnz -= 2;
-			continue;
-	 	}
                 else {
                     nnz--;
                 }
             }
             ++cnz;
         }
-	//printf("cnz = %d, nnz = %d\n", cnz, nnz);
         assert(cnz == nnz);
     }
     
     double end = omp_get_wtime( );
+#ifdef PRINTMSG
     // printf("start = %.16g\nend = %.16g\ndiff = %.16g\n", start, end, end - start);
     printf("Converting matrix data from ASCII to COO format: %.16g seconds\n", end - start);
     printf("Input Matrix: Rows = %d, Columns= %d, nnz = %d\n", m, n, nnz);
 	
     cout << "Converting to csc ... " << endl << endl;
+#endif
     csc= *(new CSC<IT,NT>(triples, nnz, m, n));
     csc.totalcols = n;
     delete [] triples;

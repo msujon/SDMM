@@ -17,7 +17,7 @@
    #if defined(BLC_AVXZ) || defined(BLC_AVX512) /* avx512f */
       #include<immintrin.h>
       #define VLENb 64
-      #if defined (DREAL)
+      #if defined(DREAL)
          #define VLEN 8
 /*
  *       AVX512 double precision 
