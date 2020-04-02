@@ -45,11 +45,11 @@ void mkl_dcsrmm
 
 typedef void (*csr_mm_t) 
 (
-   const char *transa,     // 'N', 'T' , 'C' 
-   const INDEXTYPE *m,     // number of rows of A 
-   const INDEXTYPE *n,     // number of cols of C
-   const INDEXTYPE *k,     // number of cols of A
-   const VALUETYPE *alpha, // double scalar ?? why ptr 
+   const char transa,     // 'N', 'T' , 'C' 
+   const INDEXTYPE m,     // number of rows of A 
+   const INDEXTYPE n,     // number of cols of C
+   const INDEXTYPE k,     // number of cols of A
+   const VALUETYPE alpha, // double scalar ?? why ptr 
    const char *matdescra,  // 6 characr array descriptor for A:
                            // [G/S/H/T/A/D],[L/U],[N/U],[F/C] -> [G,X,X,C] 
    const VALUETYPE *val,   // NNZ value  
@@ -57,19 +57,19 @@ typedef void (*csr_mm_t)
    const INDEXTYPE *pntrb, // starting index for rowptr
    const INDEXTYPE *pntre, // ending index for rowptr
    const VALUETYPE *b,     // Dense B matrix
-   const INDEXTYPE *ldb,   // 2nd dimension of b for zero-based indexing  
-   const VALUETYPE *beta,  // double scalar beta[0] 
+   const INDEXTYPE ldb,   // 2nd dimension of b for zero-based indexing  
+   const VALUETYPE beta,  // double scalar beta[0] 
    VALUETYPE *c,           // Dense matrix c
-   const INDEXTYPE *ldc    // 2nd dimension size of b 
+   const INDEXTYPE ldc    // 2nd dimension size of b 
 );
 
 typedef void (*csc_mm_t) 
 (
-   const char *transa,     // 'N', 'T' , 'C' 
-   const INDEXTYPE *m,     // number of rows of A 
-   const INDEXTYPE *n,     // number of cols of C
-   const INDEXTYPE *k,     // number of cols of A
-   const VALUETYPE *alpha, // double scalar ?? why ptr 
+   const char transa,     // 'N', 'T' , 'C' 
+   const INDEXTYPE m,     // number of rows of A 
+   const INDEXTYPE n,     // number of cols of C
+   const INDEXTYPE k,     // number of cols of A
+   const VALUETYPE alpha, // double scalar ?? why ptr 
    const char *matdescra,  // 6 characr array descriptor for A:
                            // [G/S/H/T/A/D],[L/U],[N/U],[F/C] -> [G,X,X,C] 
    const VALUETYPE *val,   // NNZ value  
@@ -77,10 +77,10 @@ typedef void (*csc_mm_t)
    const INDEXTYPE *pntrb, // starting index for colptr
    const INDEXTYPE *pntre, // ending index for colptr
    const VALUETYPE *b,     // Dense B matrix
-   const INDEXTYPE *ldb,   // 2nd dimension of b for zero-based indexing  
-   const VALUETYPE *beta,  // double scalar beta[0] 
+   const INDEXTYPE ldb,   // 2nd dimension of b for zero-based indexing  
+   const VALUETYPE beta,  // double scalar beta[0] 
    VALUETYPE *c,           // Dense matrix c
-   const INDEXTYPE *ldc    // 2nd dimension size of b 
+   const INDEXTYPE ldc    // 2nd dimension size of b 
 );
 
 /*
@@ -252,11 +252,10 @@ int doChecking(IT NNZA, IT M, IT N, NT *C, NT *D, IT ldc)
  *
  */
    EPS = Epsilon<NT>();
-   //cout << "--- EPS = " << EPS << endl; 
+   cout << "--- EPS = " << EPS << endl; 
    // the idea is how many flop one element needs 
    ErrBound = 2 * (NNZA/N) * EPS; 
-   //cout << "--- ErrBound = " << ErrBound << " NNZ(A) = " << NNZA 
-   //     << " N = " << N  <<endl; 
+   cout << "--- ErrBound = " << ErrBound << " NNZ(A) = " << NNZA << " N = " << N  <<endl; 
    // row major! 
    for (i=0; i < M; i++)
    {
@@ -290,18 +289,21 @@ int doChecking(IT NNZA, IT M, IT N, NT *C, NT *D, IT ldc)
    return(nerr);
 }
 
-template <typename IT, typename NT, csr_kernel_t trusted, csr_kernel_t test>
-int doTesting_Acsr(CSR<IT, NT> &A, IT M, IT N, IT D)
+template <csr_mm_t trusted, csr_mm_t test>
+int doTesting_Acsr(CSR<INDEXTYPE, VALUETYPE> &A, INDEXTYPE M, INDEXTYPE N, 
+      INDEXTYPE D)
 {
    int nerr; 
-   size_t szB, szC; 
+   size_t i, szB, szC; 
    VALUETYPE *pb, *b, *pc0, *c0, *pc, *c;
-      
+   INDEXTYPE nnz=A.nnz;
+
    std::default_random_engine generator;
    std::uniform_real_distribution<double> distribution(0.0,1.0);
+   
       
-   VALUETYPE beta[1] = {1.0};
-   VALUETYPE alpha[1] = {1.0};
+   VALUETYPE beta = 1.0;
+   VALUETYPE alpha = 1.0;
       
    szB = ((N*D+VLEN-1)/VLEN)*VLEN;  // szB in element
    szC = ((M*D+VLEN-1)/VLEN)*VLEN;  // szC in element 
@@ -312,33 +314,38 @@ int doTesting_Acsr(CSR<IT, NT> &A, IT M, IT N, IT D)
    
    pc0 = (VALUETYPE*)malloc(szC*sizeof(VALUETYPE)+ATL_Cachelen);
    assert(pc0);
-   c0 = (VALUETYPE*) ATL_AlignPtr(pc); 
+   c0 = (VALUETYPE*) ATL_AlignPtr(pc0); 
       
    pc = (VALUETYPE*)malloc(szC*sizeof(VALUETYPE)+ATL_Cachelen);
    assert(pc);
    c = (VALUETYPE*) ATL_AlignPtr(pc); 
    
    // init    
+   fprintf(stderr, "Before init: szB=%ld, szC=%ld\n", szB, szC);
    for (i=0; i < szB; i++)
-   #if 1
+   #if 0
       b[i] = distribution(generator);  
    #else
-      b[i] = 1.0*i;  
+      //b[i] = 1.0*i;  
+      b[i] = 0.5;  
    #endif
    for (i=0; i < szC; i++)
-   #if 1
+   #if 0
       c[i] = c0[i] = distribution(generator);  
    #else
-      c[i] = 0;
+      c[i] = c0[i] = 0;
    #endif
-      
-   trusted('N', M, N, D, alpha, "GXXC", A.val, A.colids, 
-            A.rowptr[0], A.rowptr[1], b, D, beta, c0, D);   
 
-   test('N', M, N, D, alpha, "GXXC", A.val, A.colids, 
-            A.rowptr[0], A.rowptr[1], b, D, beta, c0, D);  
+   fprintf(stderr, "Applying trusted kernel\n");
+   trusted('N', M, N, D, alpha, "GXXC", A.values, A.colids, 
+            A.rowptr, A.rowptr+1, b, D, beta, c0, D);   
+   
+   fprintf(stderr, "Applying test kernel\n");
+   test('N', M, N, D, alpha, "GXXC", A.values, A.colids, 
+            A.rowptr, A.rowptr+1, b, D, beta, c, D);  
 
-   nerr = doChecking<IT, NT>(A.nnz, M, N, D, c0, c, D);
+   fprintf(stderr, "Testing  result \n");
+   nerr = doChecking<INDEXTYPE, VALUETYPE>(nnz, M, N, c0, c, D);
    
    return(nerr);
 }
@@ -353,10 +360,10 @@ int doTesting_Acsr(CSR<IT, NT> &A, IT M, IT N, IT D)
  * allocate large work-space for A/B/C to make it out of cache and shift the 
  * worksace each time
  */
-template<csr_kernel_t CSR_KERNEL>
+template<csr_mm_t CSR_KERNEL>
 double doTiming_Acsr_CacheFlushing
 (
- CSR<INDEXTYPE, VALUETYPE> A_csr, 
+ CSR<INDEXTYPE, VALUETYPE> &A, 
  INDEXTYPE M, 
  INDEXTYPE N, 
  INDEXTYPE D, 
@@ -409,8 +416,9 @@ double doTiming_Acsr_CacheFlushing
    start = omp_get_wtime();
    for (i=0, j=nset; i < nrep; i++)
    {
-         //CSR_KERNEL<INDEXTYPE,VALUETYPE>(M, D, N, A_csr, b, D, c, D); 
-         CSR_KERNEL(M, D, N, A_csr, b, D, c, D); 
+         //a1b1 kernel
+         CSR_KERNEL('N', M, N, D, 1.0, "GXXC", A.values, A.colids, 
+            A.rowptr, A.rowptr+1, b, D, 1.0, c, D);   
          b += setsz; 
          c += setsz;
          j--; 
@@ -428,10 +436,10 @@ double doTiming_Acsr_CacheFlushing
 /*
  * Assuming large working set, sizeof B+D > L3 cache 
  */
-template<csr_kernel_t CSR_KERNEL>
+template<csr_mm_t CSR_KERNEL>
 double doTiming_Acsr
 (
- CSR<INDEXTYPE, VALUETYPE> A_csr, 
+ CSR<INDEXTYPE, VALUETYPE> &A, 
  INDEXTYPE M, 
  INDEXTYPE N, 
  INDEXTYPE D, 
@@ -470,11 +478,18 @@ double doTiming_Acsr
  * So we can safely skip 1st iteration... C will be in cache then
  */
 
-   CSR_KERNEL(M, D, N, A_csr, b, D, c, D);  // skip it's timing 
+   //CSR_KERNEL(M, D, N, A_csr, b, D, c, D);  // skip it's timing 
+   //a1b1 kernel
+   CSR_KERNEL('N', M, N, D, 1.0, "GXXC", A.values, A.colids, 
+              A.rowptr, A.rowptr+1, b, D, 1.0, c, D);   
    
    start = omp_get_wtime();
    for (i=0; i < nrep; i++)
-      CSR_KERNEL(M, D, N, A_csr, b, D, c, D); 
+   {
+      //a1b1 kernel
+      CSR_KERNEL('N', M, N, D, 1.0, "GXXC", A.values, A.colids, 
+                 A.rowptr, A.rowptr+1, b, D, 1.0, c, D);   
+   }
    end = omp_get_wtime();
    
    free(pb);
@@ -511,14 +526,16 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
    
    // copy constructor
    A_csr1 = A_csr0;
-
+   
 /*
  * test the result if mandated 
  */
+   assert(N && M && D);
    if (isTest)
    {
-      nerr = doTesting_Acse<INDEXTYPE,VALUETYPE, Trusted_SDMM_CSR_IKJ>(A_csr0, 
-            M, N, D); 
+      fprintf(stderr, "starting testing ... M=%d, N=%d, D=%d\n", M, N, D);
+      nerr = doTesting_Acsr<dcsrmm_IKJ_a1b1,dcsrmm_IKJ_D128_a1b1>
+                            (A_csr0, M, N, D); 
       if (!nerr)
          fprintf(stdout, "PASSED TEST\n");
       else
@@ -537,11 +554,12 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
          nrep);
    fprintf(stdout, "Trusted time = %e\n", t0); 
 #else
-   t0 = doTiming_Acsr<Trusted_SDMM_CSR_IKJ>(A_csr0, M, N, D, csKB, nrep);
+   //t0 = doTiming_Acsr<Trusted_SDMM_CSR_IKJ>(A_csr0, M, N, D, csKB, nrep);
+   t0 = doTiming_Acsr<dcsrmm_IKJ_a1b1>(A_csr0, M, N, D, csKB, nrep);
    //fprintf(stdout, "trusted time = %e\n", t0); 
    
    //t1 = doTiming_Acsr<SDMM_CSR_IKJ_D128>(A_csr1, M, N, D, csKB, nrep);
-   t1 = doTiming_Acsr<SDMM_CSR_IKJ_D128_Aligned>(A_csr1, M, N, D, csKB, nrep);
+   t1 = doTiming_Acsr<dcsrmm_IKJ_D128_a1b1>(A_csr1, M, N, D, csKB, nrep);
    //fprintf(stdout, "test time = %e\n", t1); 
 
 #endif

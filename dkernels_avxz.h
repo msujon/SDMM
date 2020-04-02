@@ -5,22 +5,22 @@
  */
 void dcsrmm_IKJ_D128_a1b1   
 (
-   const char *transa,     // 'N', 'T' , 'C' 
-   const INDEXTYPE *m,     // number of rows of A 
-   const INDEXTYPE *n,     // number of cols of C
-   const INDEXTYPE *k,     // number of cols of A
-   const double *alpha, // double scalar ?? why ptr 
+   const char transa,     // 'N', 'T' , 'C' 
+   const INDEXTYPE m,     // number of rows of A 
+   const INDEXTYPE n,     // number of cols of C
+   const INDEXTYPE k,     // number of cols of A
+   const double alpha, // double scalar ?? why ptr 
    const char *matdescra,  // 6 characr array descriptor for A:
                            // [G/S/H/T/A/D],[L/U],[N/U],[F/C] -> [G,X,X,C] 
    const double *val,   // NNZ value  
    const INDEXTYPE *indx,  // colids -> column indices 
    const INDEXTYPE *pntrb, // starting index for rowptr
    const INDEXTYPE *pntre, // ending index for rowptr
-   const VALUETYPE *b,     // Dense B matrix
-   const INDEXTYPE *ldb,   // 2nd dimension of b for zero-based indexing  
-   const double *beta,  // double scalar beta[0] 
-   double *c,           // Dense matrix c
-   const INDEXTYPE *ldc    // 2nd dimension size of b 
+   const VALUETYPE *B,     // Dense B matrix
+   const INDEXTYPE ldb,   // 2nd dimension of b for zero-based indexing  
+   const double beta,  // double scalar beta[0] 
+   double *C,           // Dense matrix c
+   const INDEXTYPE ldc    // 2nd dimension size of c 
 )
 {
 /*
@@ -128,22 +128,22 @@ void dcsrmm_IKJ_D128_a1b1
  */
 void dcscmm_KIJ_D128_a1b1   
 (
-   const char *transa,     // 'N', 'T' , 'C' 
-   const INDEXTYPE *m,     // number of rows of A 
-   const INDEXTYPE *n,     // number of cols of C
-   const INDEXTYPE *k,     // number of cols of A
-   const double *alpha, // double scalar ?? why ptr 
+   const char transa,     // 'N', 'T' , 'C' 
+   const INDEXTYPE m,     // number of rows of A 
+   const INDEXTYPE n,     // number of cols of C
+   const INDEXTYPE k,     // number of cols of A
+   const double alpha, // double scalar ?? why ptr 
    const char *matdescra,  // 6 characr array descriptor for A:
                            // [G/S/H/T/A/D],[L/U],[N/U],[F/C] -> [G,X,X,C] 
    const double *val,   // NNZ value  
    const INDEXTYPE *indx,  // rowids -> row indices 
    const INDEXTYPE *pntrb, // starting index for colptr
    const INDEXTYPE *pntre, // ending index for colptr
-   const VALUETYPE *b,     // Dense B matrix
-   const INDEXTYPE *ldb,   // 2nd dimension of b for zero-based indexing  
-   const double *beta,  // double scalar beta[0] 
-   double *c,           // Dense matrix c
-   const INDEXTYPE *ldc    // 2nd dimension size of b 
+   const VALUETYPE *B,     // Dense B matrix
+   const INDEXTYPE ldb,   // 2nd dimension of b for zero-based indexing  
+   const double beta,  // double scalar beta[0] 
+   double *C,           // Dense matrix c
+   const INDEXTYPE ldc    // 2nd dimension size of b 
 )
 {
    for (INDEXTYPE kk=0; kk < k; kk++)

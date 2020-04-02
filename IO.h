@@ -7,6 +7,8 @@
 
 #define READBUFFER (512 * 1024 * 1024)  // in MB
 
+#define PRINTMSG 1
+
 template <typename IT, typename NT>
 int ReadBinary(string filename, CSC<IT,NT> & csc)
 {
@@ -27,8 +29,9 @@ int ReadBinary(string filename, CSC<IT,NT> & csc)
         return -1;
     }
     double start = omp_get_wtime( );
+#ifdef PRINTMSG
     cout << "Reading matrix with dimensions: "<< m << "-by-" << n <<" having "<< nnz << " nonzeros" << endl;
-    
+#endif
     IT * rowindices = new IT[nnz];
     IT * colindices = new IT[nnz];
     NT * vals = new NT[nnz];
@@ -69,7 +72,9 @@ int ReadASCII(string filename, CSC<IT,NT> & csc)
         infile.getline(line,256);
         if (strstr(line, "symmetric")) {
             isSymmetric = true;
+#ifdef PRINTMSG
             cout << "Matrix is symmetric" << endl;
+#endif
         }
         c = infile.get();
     }
@@ -143,11 +148,13 @@ int ReadASCII(string filename, CSC<IT,NT> & csc)
     }
     
     double end = omp_get_wtime( );
+#ifdef PRINTMSG
     // printf("start = %.16g\nend = %.16g\ndiff = %.16g\n", start, end, end - start);
     printf("Converting matrix data from ASCII to COO format: %.16g seconds\n", end - start);
     printf("Input Matrix: Rows = %d, Columns= %d, nnz = %d\n", m, n, nnz);
 	
     cout << "Converting to csc ... " << endl << endl;
+#endif 
     csc= *(new CSC<IT,NT>(triples, nnz, m, n));
     csc.totalcols = n;
     delete [] triples;
