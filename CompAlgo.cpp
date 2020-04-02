@@ -592,6 +592,109 @@ void SDMM_CSC_KIJ_D128(IT M, IT N, IT K, const CSC<IT, NT>& A, NT *B, IT ldb,
    }
 }
 
+/*
+ * Register blocking ideas for CSC_KIJ  
+ *       A->MxN, B->NxD, C->MxD 
+ *       MxD ... D is fixed, however we can change M... so, check for diff M
+ *       
+ *       C write = NNZ * D  (in comp, C write in opt IKJ M*D)
+ *          it's 1000x slower than IKJ because of that 
+ *       We need to reduce C memory write by order of MxD to beat IKJ
+ *          in KIJ_D128, we only reduce C by D... C-write = NNZ 
+ *
+ *          Alogorithm:
+ *          A -> MxK, B -> KxN, C -> MxN
+ *          M = 4, N = 2, K  
+ *             
+ *             c00 = C[0,0]   c01 = C[0,1]
+ *             c10 = C[1,0]   c11 = C[1,1]
+ *             c20 = C[2,0]   c21 = C[2,1]
+ *             c30 = C[3,0]   c31 = C[3,1]
+ *          
+ *             for (k=0; k < K; k++)
+ *             {
+ *                a0k = A[0,k]
+ *                a1k = A[1,k]
+ *                a2k = A[2,k]
+ *                a3k = A[3,k]
+ *                
+ *                bk0 = B[k,0]
+ *                bk1 = B[k,1]
+ *
+ *
+ *                c00 += a0k * bk0
+ *                c01 += a0k * bk1
+ *                c10 += a1k * bk0
+ *                c11 += a1k * bk1
+ *                c20 += a2k * bk0
+ *                c21 += a2k * bk1
+ *                c30 += a3k * bk0
+ *                c31 += a3k * bk1
+ *             }
+ 
+ *             C[0,0] = c00   C[0,1] = c01
+ *             C[1,0] = c10   C[1,1] = c11
+ *             C[2,0] = c20   C[2,1] = c21
+ *             C[3,0] = c30   C[3,1] = c31 
+ *
+ *          Total registers:
+ *               MxN + M + N  
+ *          
+ *          if we want to minimize read/write in C,   
+ *               MxN must fit in registers  
+ *               A read access increased by M, 
+ *               B read access increased by N (in our problem, D )
+ *
+ *               if K is very very large, it may still worth 
+ *
+ *               MxN budget in a core must be 32x8 = 256 for single precision, 
+ *                                            32x16 = 512 for double precision
+ *       
+ *       NOTE: problem, not possible without modifying CSC format!!!!!!
+ *
+ */
+   
+/*
+ * try, col by col computation:
+ *    JKI
+ * B & C col_major 
+ */
+
+template <typename IT, typename NT>
+void SDMM_CSC_JKI(IT M, IT N, IT K, const CSC<IT, NT>& A, NT *B, IT ldb,
+      NT *C, IT ldc)
+{
+   
+   for (IT j=0; j < N; j++)
+   {
+      for (IT k=0; k < K; k++)
+      {
+         IT ja0 = A.colptr[k];
+         IT ja1 = A.colptr[k+1]; 
+         
+         NT b0 = B[k+j*ldb]; // b access minimized 
+
+         for (IT i = ja0; i < ja1; i++)
+         {
+            IT ia0 = A.rowids[i];
+            NT a0 = A.values[i]; 
+            
+            C[ia0+k*ldc] += b0 * a0;  
+         
+         }
+      }
+   }
+/*
+ *    N = 4 
+ * ===========
+ * How to optimize it     
+ *
+ */
+}
+
+
+
+
 // from ATLAS;s ATL_epsilon.c 
 template <typename NT> 
 NT Epsilon(void)
