@@ -23,34 +23,9 @@
    #endif
 #endif
 
-#if 0
-/* 
- * NOTE: MKL DEPRECATED this routine, developed new API!!!!
- * using mkl's function prototype as standard for our kernel
- *    but not pointer for scalar!!! 
+/*
+ * only supports zero based index so far, will extend it later 
  */
-void mkl_dcsrmm 
-(
-   const char *transa ,    // 'N', 'T' , 'C' 
-   const MKL_INT *m ,      // number of rows of A 
-   const MKL_INT *n ,      // number of cols of C
-   const MKL_INT *k ,      // number of cols of A
-   const double *alpha ,   // double scalar ?? why ptr 
-   const char *matdescra , // 6 characr array descriptor for A:
-                                 // [G/S/H/T/A/D],[L/U],[N/U],[F/C] -> [G,X,X,C] 
-   const double *val ,     // NNZ value  
-   const MKL_INT *indx ,   // colids -> column indices 
-   const MKL_INT *pntrb ,  // starting index for rowptr
-   const MKL_INT *pntre ,  // ending index for rowptr
-   const double *b ,       // Dense B matrix
-   const MKL_INT *ldb ,    // 2nd dimension of b for zero-based indexing, rowsz  
-   const double *beta ,    // double scalar beta[0] 
-   double *c ,             // Dense matrix c
-   const MKL_INT *ldc      // 2nd dimension of b 
-);
-#endif
-
-
 typedef void (*csr_mm_t) 
 (
    const char transa,     // 'N', 'T' , 'C' 
@@ -60,6 +35,9 @@ typedef void (*csr_mm_t)
    const VALUETYPE alpha, // double scalar ?? why ptr 
    const char *matdescra,  // 6 characr array descriptor for A:
                            // [G/S/H/T/A/D],[L/U],[N/U],[F/C] -> [G,X,X,C] 
+   const INDEXTYPE nnz,   // nonzeros: need to recreate csr with mkl 
+   const INDEXTYPE rows,  // number of rows
+   const INDEXTYPE cols,  // number of columns 
    const VALUETYPE *val,   // NNZ value  
    const INDEXTYPE *indx,  // colids -> column indices 
    const INDEXTYPE *pntrb, // starting index for rowptr
@@ -80,6 +58,9 @@ typedef void (*csc_mm_t)
    const VALUETYPE alpha, // double scalar ?? why ptr 
    const char *matdescra,  // 6 characr array descriptor for A:
                            // [G/S/H/T/A/D],[L/U],[N/U],[F/C] -> [G,X,X,C] 
+   const INDEXTYPE nnz,   // nonzeros: need to recreate csr with mkl 
+   const INDEXTYPE rows,  // number of rows
+   const INDEXTYPE cols,  // number of columns 
    const VALUETYPE *val,   // NNZ value  
    const INDEXTYPE *indx,  // rowids -> row indices 
    const INDEXTYPE *pntrb, // starting index for colptr
@@ -107,7 +88,14 @@ typedef void (*csc_mm_t)
    const double alpha, 
    const sparse_matrix_t A,
                            -> need to create first using mkl_sparse_d_create_csr 
-   const struct matrix_descr descr,
+   struct matrix_descr descr
+   {
+         sparse_matrix_type_t type;
+         sparse_fill_mode_t mode;
+         sparse_dia_tyoe_t diag;
+   }
+
+   sparse_matrix_type_t
                            -> SPARSE_MATRIX_TYPE_GENERAL
                            -> SPARSE_MATRIX_TYPE_SYMMETRIC
                            -> SPARSE_MATRIX_TYPE_HERMITIAN
@@ -115,6 +103,14 @@ typedef void (*csc_mm_t)
                            -> SPARSE_MATRIX_TYPE_DIAGONAL
                            -> SPARSE_MATRIX_TYPE_BLOCK_TRIANGULAR
                            -> SPARSE_MATRIX_TYPE_BLOCK_DIAGONAL 
+   sparse_fill_mode_t
+                           -> SPARSE_FILL_MODE_LOWER
+                           -> SPARSE_FILL_MODE_UPPER
+   sparse_dia_type_t
+                           -> SPARSE_DIAG_NON_UNIT
+                           -> SPARSE_DIAG_UNIT
+
+
 
    const sparse_layout_t layout, // for dense matrices
                            -> SPARSE_LAYOUT_COLUMN_MAJOR 
@@ -134,42 +130,146 @@ typedef void (*csc_mm_t)
  *    -> SPARSE_STATUS_EXECUTION_FAILED
  *    -> SPARSE_STATUS_INTERNAL_ERROR
  *    -> SPARSE_STATUS_NOT_SUPPORTED
+ * 
+ * indexing 
+ *    -> SPARSE_INDEX_BASE_ZERO
+ *    -> SPARSE_INDEX_BASE_ONE
  *
  * Need to apply mkl_sparse_d_create_csr routine to create A frist 
- *
+ * 
  *
  */
-#ifdef TIME_MKL
-#incldue "mkl_spblas.h"
 
-void MKL_dcsr_mm
+#define TIME_MKL 1 
+
+#ifdef TIME_MKL
+
+#include "mkl_spblas.h"
+
+void MKL_csr_mm
 (
    const char transa,     // 'N', 'T' , 'C' 
-   const INDEXTYPE m,     // number of rows of A 
+   const INDEXTYPE m,     // number of rows of A needed to compute 
    const INDEXTYPE n,     // number of cols of C
    const INDEXTYPE k,     // number of cols of A
    const VALUETYPE alpha, // double scalar ?? why ptr 
-   const char *matdescra,  // 6 characr array descriptor for A:
-                           // [G/S/H/T/A/D],[L/U],[N/U],[F/C] -> [G,X,X,C] 
-   const VALUETYPE *val,   // NNZ value  
-   const INDEXTYPE *indx,  // colids -> column indices 
-   const INDEXTYPE *pntrb, // starting index for rowptr
-   const INDEXTYPE *pntre, // ending index for rowptr
-   const VALUETYPE *b,     // Dense B matrix
+   const char *matdescra, // 6 characr array descriptor for A:
+                          // [G/S/H/T/A/D],[L/U],[N/U],[F/C] -> [G,X,X,C] 
+   const INDEXTYPE nnz,   // nonzeros: need to recreate csr with mkl 
+   const INDEXTYPE rows,  // number of rows
+   const INDEXTYPE cols,  // number of columns 
+   const VALUETYPE *val,  // NNZ value  
+   const INDEXTYPE *indx, // colids -> column indices 
+   const INDEXTYPE *pntrb,// starting index for rowptr
+   const INDEXTYPE *pntre,// ending index for rowptr
+   const VALUETYPE *b,    // Dense B matrix
    const INDEXTYPE ldb,   // 2nd dimension of b for zero-based indexing  
    const VALUETYPE beta,  // double scalar beta[0] 
-   VALUETYPE *c,           // Dense matrix c
+   VALUETYPE *c,          // Dense matrix c
    const INDEXTYPE ldc    // 2nd dimension size of b 
 )
 {
-i  sparse_status_t stat; 
+   sparse_status_t stat; 
+   sparse_matrix_t A; 
+   struct matrix_descr Adsc; 
 
-   stat = mkl_sparse_s_create_csr (A, indexing, rows, cols, rows_start, 
-                                   rows_end, col_indx, values);
+   // 1. inspection stage
+/*
+   sparse_status_t mkl_sparse_d_create_csr 
+   (
+      sparse_matrix_t *A, 
+      const sparse_index_base_t indexing, 
+      const MKL_INT rows, 
+      const MKL_INT cols, 
+      MKL_INT *rows_start,  // not const !!
+      MKL_INT *rows_end,    // not const !!
+      MKL_INT *col_indx,    // not const !!
+      double *values        // not const
+   );
+   NOTE: create_csr will overwrote rows_start, rows_end, col_indx and values
+   So, we need to copy those here 
+*/
+   // copying CSR data, we will skip this copy in timer  
+   MKL_INT *rows_start;
+   MKL_INT *rows_end;
+   MKL_INT *col_indx;
+   VALUETYPE *values; 
+
+   rows_start = (MKL_INT*) malloc(rows*sizeof(MKL_INT));
+   assert(rows_start);
+   for (INDEXTYPE i=0; i < rows; i++)
+      rows_start[i] = pntrb[i]; 
+   
+   rows_end = (MKL_INT*) malloc(rows*sizeof(MKL_INT));
+   assert(rows_end);
+   for (INDEXTYPE i=0; i < rows; i++)
+      rows_end[i] = pntre[i]; 
+   
+   col_indx = (MKL_INT*) malloc(nnz*sizeof(MKL_INT));
+   assert(col_indx);
+   for (INDEXTYPE i=0; i < nnz; i++)
+      col_indx[i] = indx[i]; 
+   
+   values = (VALUETYPE*) malloc(nnz*sizeof(VALUETYPE));
+   assert(col_indx);
+   for (INDEXTYPE i=0; i < nnz; i++)
+      values[i] = val[i]; 
+
+   cout << "--- Running inspector for MKL" << endl;
+#ifdef DREAL 
+   stat = mkl_sparse_d_create_csr (&A, SPARSE_INDEX_BASE_ZERO, rows, cols, 
+            rows_start, rows_end, col_indx, values);  
+#else
+   stat = mkl_sparse_s_create_csr (&A, SPARSE_INDEX_BASE_ZERO, m, k, pntrb, 
+            pntre, indx, val);  
+#endif
+
    if (stat != SPARSE_STATUS_SUCCESS)
    {
-      cout << "creating csr for MKL failed!"; 
+      cout << "creating csr for MKL failed!";
+      exit(1);
    }
+   // 2. execution stage 
+/*
+   sparse_status_t mkl_sparse_d_mm 
+   (
+      const sparse_operation_t operation, 
+      const double alpha, 
+      const sparse_matrix_t A, 
+      const struct matrix_descr descr, 
+      const sparse_layout_t layout, 
+      const double *B, 
+      const MKL_INT columns, 
+      const MKL_INT ldb, 
+      const double beta, 
+      double *C, 
+      const MKL_INT ldc);
+*/ 
+   Adsc.type = SPARSE_MATRIX_TYPE_GENERAL;
+   
+   cout << "--- Running executor for MKL" << endl;
+#ifdef DREAL 
+   stat = mkl_sparse_d_mm (SPARSE_OPERATION_NON_TRANSPOSE, alpha, A,  
+                           Adsc, 
+                           SPARSE_LAYOUT_ROW_MAJOR, b, n, ldb, beta, c, ldc); 
+#else
+   stat = mkl_sparse_s_mm (SPARSE_OPERATION_NON_TRANSPOSE, alpha, A,  
+                           Adsc, 
+                           SPARSE_LAYOUT_ROW_MAJOR, b, n, ldb, beta, c, ldc); 
+#endif
+
+   if (stat != SPARSE_STATUS_SUCCESS)
+   {
+      cout << "creating csr for MKL failed!";
+      exit(1);
+   }
+/*
+ * free all data 
+ */
+   free(rows_start);
+   free(rows_end);
+   free(col_indx);
+   free(values);
 }
 
 #endif 
@@ -402,7 +502,10 @@ int doTesting_Acsr(CSR<INDEXTYPE, VALUETYPE> &A, INDEXTYPE M, INDEXTYPE N,
    VALUETYPE alpha = 1.0;
       
    szB = ((K*ldb+VLEN-1)/VLEN)*VLEN;  // szB in element
-   szC = ((M*ldc+VLEN-1)/VLEN)*VLEN;  // szC in element 
+   
+   //szC = ((M*ldc+VLEN-1)/VLEN)*VLEN;  // szC in element 
+   // changes to test mkl 
+   szC = ((A.rows*ldc+VLEN-1)/VLEN)*VLEN;  // szC in element 
       
    pb = (VALUETYPE*)malloc(szB*sizeof(VALUETYPE)+2*ATL_Cachelen);
    assert(pb);
@@ -435,12 +538,12 @@ int doTesting_Acsr(CSR<INDEXTYPE, VALUETYPE> &A, INDEXTYPE M, INDEXTYPE N,
    #endif
    }
    
-   //fprintf(stderr, "Applying trusted kernel\n");
-   trusted('N', M, N, K, alpha, "GXXC", A.values, A.colids, 
-            A.rowptr, (A.rowptr)+1, b, ldb, beta, c0, ldc);   
+   fprintf(stderr, "Applying trusted kernel\n");
+   trusted('N', M, N, K, alpha, "GXXC", A.nnz, A.rows, A.cols, A.values, 
+           A.colids, A.rowptr, (A.rowptr)+1, b, ldb, beta, c0, ldc);   
    
-   //fprintf(stderr, "Applying test kernel\n");
-   test('N', M, N, K, alpha, "GXXC", A.values, A.colids, 
+   fprintf(stderr, "Applying test kernel\n");
+   test('N', M, N, K, alpha, "GXXC", A.nnz, A.rows, A.cols, A.values, A.colids, 
             A.rowptr, (A.rowptr)+1, b, ldb, beta, c, ldc);  
 
    nerr = doChecking<INDEXTYPE, VALUETYPE>(nnz, M, N, c0, c, ldc);
@@ -518,8 +621,8 @@ double doTiming_Acsr_CacheFlushing
    for (i=0, j=nset; i < nrep; i++)
    {
          //a1b1 kernel
-         CSR_KERNEL('N', M, N, K, 1.0, "GXXC", A.values, A.colids, 
-            A.rowptr, A.rowptr+1, b, ldb, 1.0, c, ldc);   
+         CSR_KERNEL('N', M, N, K, 1.0, "GXXC", A.nnz, A.rows, A.cols, A.values, 
+                    A.colids, A.rowptr, A.rowptr+1, b, ldb, 1.0, c, ldc);   
          b += setsz; 
          c += setsz;
          j--; 
@@ -583,15 +686,15 @@ double doTiming_Acsr
 
    //CSR_KERNEL(M, D, N, A_csr, b, D, c, D);  // skip it's timing 
    //a1b1 kernel
-   CSR_KERNEL('N', M, N, K, 1.0, "GXXC", A.values, A.colids, 
-              A.rowptr, A.rowptr+1, b, ldb, 1.0, c, ldc);   
+   CSR_KERNEL('N', M, N, K, 1.0, "GXXC", A.nnz, A.rows, A.cols, A.values, 
+              A.colids, A.rowptr, A.rowptr+1, b, ldb, 1.0, c, ldc);   
    
    start = omp_get_wtime();
    for (i=0; i < nrep; i++)
    {
       //a1b1 kernel
-      CSR_KERNEL('N', M, N, K, 1.0, "GXXC", A.values, A.colids, 
-                 A.rowptr, A.rowptr+1, b, ldb, 1.0, c, ldc);   
+      CSR_KERNEL('N', M, N, K, 1.0, "GXXC", A.nnz, A.rows, A.cols, A.values, 
+                 A.colids, A.rowptr, A.rowptr+1, b, ldb, 1.0, c, ldc);   
    }
    end = omp_get_wtime();
    
@@ -644,9 +747,12 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
       // testing with same kernel to test the tester itself: sanity check  
       //nerr = doTesting_Acsr<dcsrmm_IKJ_a1b1, dcsrmm_IKJ_a1b1>
       //                      (A_csr0, M, D, N); 
-      nerr = doTesting_Acsr<dcsrmm_IKJ_a1b1,dcsrmm_IKJ_D128_a1b1>
-                            (A_csr0, M, D, N); 
       
+      //nerr = doTesting_Acsr<dcsrmm_IKJ_a1b1,dcsrmm_IKJ_D128_a1b1>
+      //                      (A_csr0, M, D, N); 
+      
+      nerr = doTesting_Acsr<dcsrmm_IKJ_a1b1, MKL_csr_mm>
+                            (A_csr0, M, D, N); 
       if (!nerr)
          fprintf(stdout, "PASSED TEST\n");
       else
