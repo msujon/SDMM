@@ -139,7 +139,10 @@ typedef void (*csc_mm_t)
  *
  *
  */
-void Trusted_MKL_dcsr_mm
+#ifdef TIME_MKL
+#incldue "mkl_spblas.h"
+
+void MKL_dcsr_mm
 (
    const char transa,     // 'N', 'T' , 'C' 
    const INDEXTYPE m,     // number of rows of A 
@@ -159,10 +162,17 @@ void Trusted_MKL_dcsr_mm
    const INDEXTYPE ldc    // 2nd dimension size of b 
 )
 {
+i  sparse_status_t stat; 
 
+   stat = mkl_sparse_s_create_csr (A, indexing, rows, cols, rows_start, 
+                                   rows_end, col_indx, values);
+   if (stat != SPARSE_STATUS_SUCCESS)
+   {
+      cout << "creating csr for MKL failed!"; 
+   }
 }
 
-
+#endif 
 
 
 /*
@@ -373,22 +383,26 @@ int doChecking(IT NNZA, IT M, IT N, NT *C, NT *D, IT ldc)
 
 template <csr_mm_t trusted, csr_mm_t test>
 int doTesting_Acsr(CSR<INDEXTYPE, VALUETYPE> &A, INDEXTYPE M, INDEXTYPE N, 
-      INDEXTYPE D)
+      INDEXTYPE K)
 {
    int nerr; 
-   size_t i, szB, szC; 
+   size_t i, szB, szC, ldc, ldb; 
    VALUETYPE *pb, *b, *pc0, *c0, *pc, *c;
    INDEXTYPE nnz=A.nnz;
 
    std::default_random_engine generator;
    std::uniform_real_distribution<double> distribution(0.0,1.0);
-   
-      
+
+/*
+ * NOTE: we are considering only row major B and C storage now
+ */
+   ldb = ldc = N; // both row major 
+
    VALUETYPE beta = 1.0;
    VALUETYPE alpha = 1.0;
       
-   szB = ((N*D+VLEN-1)/VLEN)*VLEN;  // szB in element
-   szC = ((M*D+VLEN-1)/VLEN)*VLEN;  // szC in element 
+   szB = ((K*ldb+VLEN-1)/VLEN)*VLEN;  // szB in element
+   szC = ((M*ldc+VLEN-1)/VLEN)*VLEN;  // szC in element 
       
    pb = (VALUETYPE*)malloc(szB*sizeof(VALUETYPE)+2*ATL_Cachelen);
    assert(pb);
@@ -422,14 +436,14 @@ int doTesting_Acsr(CSR<INDEXTYPE, VALUETYPE> &A, INDEXTYPE M, INDEXTYPE N,
    }
    
    //fprintf(stderr, "Applying trusted kernel\n");
-   trusted('N', M, D, N, alpha, "GXXC", A.values, A.colids, 
-            A.rowptr, (A.rowptr)+1, b, D, beta, c0, D);   
+   trusted('N', M, N, K, alpha, "GXXC", A.values, A.colids, 
+            A.rowptr, (A.rowptr)+1, b, ldb, beta, c0, ldc);   
    
    //fprintf(stderr, "Applying test kernel\n");
-   test('N', M, D, N, alpha, "GXXC", A.values, A.colids, 
-            A.rowptr, (A.rowptr)+1, b, D, beta, c, D);  
+   test('N', M, N, K, alpha, "GXXC", A.values, A.colids, 
+            A.rowptr, (A.rowptr)+1, b, ldb, beta, c, ldc);  
 
-   nerr = doChecking<INDEXTYPE, VALUETYPE>(nnz, M, D, c0, c, D);
+   nerr = doChecking<INDEXTYPE, VALUETYPE>(nnz, M, N, c0, c, ldc);
 
    free(pc0);
    free(pc);
@@ -452,13 +466,13 @@ double doTiming_Acsr_CacheFlushing
  CSR<INDEXTYPE, VALUETYPE> &A, 
  INDEXTYPE M, 
  INDEXTYPE N, 
- INDEXTYPE D, 
+ INDEXTYPE K, 
  int csKB, 
  int nrep     /* if nrep == 0, nrep = number of wset fit in cache */
  )
 {
    int i, j;
-   size_t sz, szB, szC;
+   size_t sz, szB, szC, ldb, ldc;
    size_t cs, setsz, nset, Nt; 
    VALUETYPE *wp, *b, *c, *stc, *stb; 
    double start, end;
@@ -473,8 +487,9 @@ double doTiming_Acsr_CacheFlushing
  */
    cs = csKB*(1024/sizeof(VALUETYPE)); // number elem fit in cache
 
-   szB = ((N*D+VLEN-1)/VLEN)*VLEN;  // szB in element
-   szC = ((M*D+VLEN-1)/VLEN)*VLEN;  // szC in element 
+   ldb = ldc = N; // considering both row-major 
+   szB = ((K*ldb+VLEN-1)/VLEN)*VLEN;  // szB in element
+   szC = ((M*ldc+VLEN-1)/VLEN)*VLEN;  // szC in element 
    
    setsz = szB + szC; // working set in element, multiple of VLEN 
    nset = (cs + setsz - 1)/setsz; // number of working set fit in cache  
@@ -503,8 +518,8 @@ double doTiming_Acsr_CacheFlushing
    for (i=0, j=nset; i < nrep; i++)
    {
          //a1b1 kernel
-         CSR_KERNEL('N', M, D, N, 1.0, "GXXC", A.values, A.colids, 
-            A.rowptr, A.rowptr+1, b, D, 1.0, c, D);   
+         CSR_KERNEL('N', M, N, K, 1.0, "GXXC", A.values, A.colids, 
+            A.rowptr, A.rowptr+1, b, ldb, 1.0, c, ldc);   
          b += setsz; 
          c += setsz;
          j--; 
@@ -528,21 +543,23 @@ double doTiming_Acsr
  CSR<INDEXTYPE, VALUETYPE> &A, 
  INDEXTYPE M, 
  INDEXTYPE N, 
- INDEXTYPE D, 
+ INDEXTYPE K, 
  int csKB, 
  int nrep     /* if nrep == 0, nrep = number of wset fit in cache */
  )
 {
    int i, j;
    double start, end;
-   size_t szB, szC; 
+   size_t szB, szC, ldb, ldc; 
    VALUETYPE *pb, *b, *pc, *c;
 
    std::default_random_engine generator;
    std::uniform_real_distribution<double> distribution(0.0,1.0);
 
-   szB = ((N*D+VLEN-1)/VLEN)*VLEN;  // szB in element
-   szC = ((M*D+VLEN-1)/VLEN)*VLEN;  // szC in element 
+   ldb = ldc = N; // considering both row-major   
+
+   szB = ((K*ldb+VLEN-1)/VLEN)*VLEN;  // szB in element
+   szC = ((M*ldc+VLEN-1)/VLEN)*VLEN;  // szC in element 
 
    pb = (VALUETYPE*)malloc(szB*sizeof(VALUETYPE)+ATL_Cachelen);
    assert(pb);
@@ -566,15 +583,15 @@ double doTiming_Acsr
 
    //CSR_KERNEL(M, D, N, A_csr, b, D, c, D);  // skip it's timing 
    //a1b1 kernel
-   CSR_KERNEL('N', M, D, N, 1.0, "GXXC", A.values, A.colids, 
-              A.rowptr, A.rowptr+1, b, D, 1.0, c, D);   
+   CSR_KERNEL('N', M, N, K, 1.0, "GXXC", A.values, A.colids, 
+              A.rowptr, A.rowptr+1, b, ldb, 1.0, c, ldc);   
    
    start = omp_get_wtime();
    for (i=0; i < nrep; i++)
    {
       //a1b1 kernel
-      CSR_KERNEL('N', M, D, N, 1.0, "GXXC", A.values, A.colids, 
-                 A.rowptr, A.rowptr+1, b, D, 1.0, c, D);   
+      CSR_KERNEL('N', M, N, K, 1.0, "GXXC", A.values, A.colids, 
+                 A.rowptr, A.rowptr+1, b, ldb, 1.0, c, ldc);   
    }
    end = omp_get_wtime();
    
@@ -615,15 +632,20 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
    
 /*
  * test the result if mandated 
+ * NOTE: general notation: A->MxK B->KxN, C->MxN
+ *       SDMM with D     : A->MxN, B->NxD, C->MxD 
+ *                            M->M, K->N, N->D 
+ *       To avoid confusion, I'm using MNK general notation routines except 
+ *       this one 
  */
    assert(N && M && D);
    if (isTest)
    {
       // testing with same kernel to test the tester itself: sanity check  
       //nerr = doTesting_Acsr<dcsrmm_IKJ_a1b1, dcsrmm_IKJ_a1b1>
-      //                      (A_csr0, M, N, D); 
+      //                      (A_csr0, M, D, N); 
       nerr = doTesting_Acsr<dcsrmm_IKJ_a1b1,dcsrmm_IKJ_D128_a1b1>
-                            (A_csr0, M, N, D); 
+                            (A_csr0, M, D, N); 
       
       if (!nerr)
          fprintf(stdout, "PASSED TEST\n");
@@ -643,15 +665,16 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
          nrep);
    fprintf(stdout, "Trusted time = %e\n", t0); 
 #else
-   // base kernel 
-   //t0 = doTiming_Acsr<Trusted_SDMM_CSR_IKJ>(A_csr0, M, N, D, csKB, nrep);
-   t0 = doTiming_Acsr<dcsrmm_IKJ_a1b1>(A_csr0, M, N, D, csKB, nrep);
+   // base kernel
+/*
+ * NOTE: general notation: A->MxK B->KxN, C->MxN
+ *       SDMM with D     : A->MxN, B->NxD, C->MxD 
+ */
+   t0 = doTiming_Acsr<dcsrmm_IKJ_a1b1>(A_csr0, M, D, N, csKB, nrep);
    //fprintf(stdout, "trusted time = %e\n", t0); 
   
    // optimized kernel 
-   //t1 = doTiming_Acsr<SDMM_CSR_IKJ_D128>(A_csr1, M, N, D, csKB, nrep);
-   t1 = doTiming_Acsr<dcsrmm_IKJ_D128_a1b1>(A_csr1, M, N, D, csKB, nrep);
-   //t1 = doTiming_Acsr<dcsrmm_IKJ_a1b1>(A_csr0, M, N, D, csKB, nrep);
+   t1 = doTiming_Acsr<dcsrmm_IKJ_D128_a1b1>(A_csr1, M, D, N, csKB, nrep);
    //fprintf(stdout, "test time = %e\n", t1); 
 #endif
 
