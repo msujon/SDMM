@@ -2,6 +2,10 @@ SAMPLE = ./sample
 BIN = ./bin
 
 CC = g++
+
+# valgrind doesn't support avxz, to check memory error call with avx 
+#FLAGS = -g -fopenmp -O3 -mavx 
+
 FLAGS = -g -fopenmp -O3 -march=native
 
 TOCOMPILE=
