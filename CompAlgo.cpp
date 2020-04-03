@@ -24,7 +24,8 @@
 #endif
 
 #if 0
-/*
+/* 
+ * NOTE: MKL DEPRECATED this routine, developed new API!!!!
  * using mkl's function prototype as standard for our kernel
  *    but not pointer for scalar!!! 
  */
@@ -89,6 +90,80 @@ typedef void (*csc_mm_t)
    VALUETYPE *c,           // Dense matrix c
    const INDEXTYPE ldc    // 2nd dimension size of b 
 );
+
+/*
+ * NOTE: I'm not gonna change my API... using a wrapper function to call 
+ * MKL routine for trusted csr_mm 
+ * new API: 
+ * ========
+ * 
+ 
+ sparse_status_t mkl_sparse_d_mm 
+ (
+   const sparse_operation_t operation, 
+                           -> SPARSE_OPERATION_NON_TRANSPOSE
+                           -> SPARSE_OPERATION_TRANSPOSE
+                           -> SPARSE_OPERATION_CONJUGATE_TRANSPOSE
+   const double alpha, 
+   const sparse_matrix_t A,
+                           -> need to create first using mkl_sparse_d_create_csr 
+   const struct matrix_descr descr,
+                           -> SPARSE_MATRIX_TYPE_GENERAL
+                           -> SPARSE_MATRIX_TYPE_SYMMETRIC
+                           -> SPARSE_MATRIX_TYPE_HERMITIAN
+                           -> SPARSE_MATRIX_TYPE_TRIANGULAR
+                           -> SPARSE_MATRIX_TYPE_DIAGONAL
+                           -> SPARSE_MATRIX_TYPE_BLOCK_TRIANGULAR
+                           -> SPARSE_MATRIX_TYPE_BLOCK_DIAGONAL 
+
+   const sparse_layout_t layout, // for dense matrices
+                           -> SPARSE_LAYOUT_COLUMN_MAJOR 
+                           -> SPARSE_LAYOUT_ROW_MAJOR  
+   const double *B, 
+   const MKL_INT columns, 
+   const MKL_INT ldb, 
+   const double beta, 
+   double *C, 
+   const MKL_INT ldc
+   );
+ *
+ * Return statue:  sparse_status_t
+ *    -> SPARSE_STATUS_SUCCESS
+ *    -> SPARSE_STATUS_NOT_INITIALIZED
+ *    -> SPARSE_STATUS_ALLOC_FAILED
+ *    -> SPARSE_STATUS_EXECUTION_FAILED
+ *    -> SPARSE_STATUS_INTERNAL_ERROR
+ *    -> SPARSE_STATUS_NOT_SUPPORTED
+ *
+ * Need to apply mkl_sparse_d_create_csr routine to create A frist 
+ *
+ *
+ */
+void Trusted_MKL_dcsr_mm
+(
+   const char transa,     // 'N', 'T' , 'C' 
+   const INDEXTYPE m,     // number of rows of A 
+   const INDEXTYPE n,     // number of cols of C
+   const INDEXTYPE k,     // number of cols of A
+   const VALUETYPE alpha, // double scalar ?? why ptr 
+   const char *matdescra,  // 6 characr array descriptor for A:
+                           // [G/S/H/T/A/D],[L/U],[N/U],[F/C] -> [G,X,X,C] 
+   const VALUETYPE *val,   // NNZ value  
+   const INDEXTYPE *indx,  // colids -> column indices 
+   const INDEXTYPE *pntrb, // starting index for rowptr
+   const INDEXTYPE *pntre, // ending index for rowptr
+   const VALUETYPE *b,     // Dense B matrix
+   const INDEXTYPE ldb,   // 2nd dimension of b for zero-based indexing  
+   const VALUETYPE beta,  // double scalar beta[0] 
+   VALUETYPE *c,           // Dense matrix c
+   const INDEXTYPE ldc    // 2nd dimension size of b 
+)
+{
+
+}
+
+
+
 
 /*
  * some misc definition: will move to another file later 
