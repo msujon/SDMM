@@ -7,7 +7,7 @@
 
 #define READBUFFER (512 * 1024 * 1024)  // in MB
 
-#define PRINTMSG 1
+//#define PRINTMSG 1
 
 template <typename IT, typename NT>
 int ReadBinary(string filename, CSC<IT,NT> & csc)

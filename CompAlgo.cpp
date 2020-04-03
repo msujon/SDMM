@@ -10,11 +10,18 @@
 #define INDEXTYPE int
 #define VALUETYPE double 
 #define DREAL 1 
+
 /*
  * NOTE: must defined type (e.g., DREAL) before including kernels.h 
  */
 #include "kernels.h" 
 
+
+#if 0  // defined in simd.h 
+   #ifndef VLEN 
+      #define VLEN 8
+   #endif
+#endif
 
 #if 0
 /*
@@ -252,10 +259,10 @@ int doChecking(IT NNZA, IT M, IT N, NT *C, NT *D, IT ldc)
  *
  */
    EPS = Epsilon<NT>();
-   cout << "--- EPS = " << EPS << endl; 
+   //cout << "--- EPS = " << EPS << endl; 
    // the idea is how many flop one element needs 
    ErrBound = 2 * (NNZA/N) * EPS; 
-   cout << "--- ErrBound = " << ErrBound << " NNZ(A) = " << NNZA << " N = " << N  <<endl; 
+   //cout << "--- ErrBound = " << ErrBound << " NNZ(A) = " << NNZA << " N = " << N  <<endl; 
    // row major! 
    for (i=0; i < M; i++)
    {
@@ -308,49 +315,53 @@ int doTesting_Acsr(CSR<INDEXTYPE, VALUETYPE> &A, INDEXTYPE M, INDEXTYPE N,
    szB = ((N*D+VLEN-1)/VLEN)*VLEN;  // szB in element
    szC = ((M*D+VLEN-1)/VLEN)*VLEN;  // szC in element 
       
-   pb = (VALUETYPE*)malloc(szB*sizeof(VALUETYPE)+ATL_Cachelen);
+   pb = (VALUETYPE*)malloc(szB*sizeof(VALUETYPE)+2*ATL_Cachelen);
    assert(pb);
    b = (VALUETYPE*) ATL_AlignPtr(pb);
-   
-   pc0 = (VALUETYPE*)malloc(szC*sizeof(VALUETYPE)+ATL_Cachelen);
+
+   pc0 = (VALUETYPE*)malloc(szC*sizeof(VALUETYPE)+2*ATL_Cachelen);
    assert(pc0);
    c0 = (VALUETYPE*) ATL_AlignPtr(pc0); 
       
-   pc = (VALUETYPE*)malloc(szC*sizeof(VALUETYPE)+ATL_Cachelen);
+   pc = (VALUETYPE*)malloc(szC*sizeof(VALUETYPE)+2*ATL_Cachelen);
    assert(pc);
    c = (VALUETYPE*) ATL_AlignPtr(pc); 
    
-   // init    
-   fprintf(stderr, "Before init: szB=%ld, szC=%ld\n", szB, szC);
+   // init   
    for (i=0; i < szB; i++)
-   #if 0
+   {
+   #if 1
       b[i] = distribution(generator);  
    #else
       //b[i] = 1.0*i;  
       b[i] = 0.5;  
    #endif
+   }
    for (i=0; i < szC; i++)
-   #if 0
+   {
+   #if 1
       c[i] = c0[i] = distribution(generator);  
    #else
-      c[i] = c0[i] = 0;
+      c[i] = 0.0; c0[i] = 0.0;
    #endif
-
-   fprintf(stderr, "Applying trusted kernel\n");
-   trusted('N', M, N, D, alpha, "GXXC", A.values, A.colids, 
-            A.rowptr, A.rowptr+1, b, D, beta, c0, D);   
+   }
    
-   fprintf(stderr, "Applying test kernel\n");
-   test('N', M, N, D, alpha, "GXXC", A.values, A.colids, 
-            A.rowptr, A.rowptr+1, b, D, beta, c, D);  
-
-   fprintf(stderr, "Testing  result \n");
-   nerr = doChecking<INDEXTYPE, VALUETYPE>(nnz, M, N, c0, c, D);
+   //fprintf(stderr, "Applying trusted kernel\n");
+   trusted('N', M, D, N, alpha, "GXXC", A.values, A.colids, 
+            A.rowptr, (A.rowptr)+1, b, D, beta, c0, D);   
    
+   //fprintf(stderr, "Applying test kernel\n");
+   test('N', M, D, N, alpha, "GXXC", A.values, A.colids, 
+            A.rowptr, (A.rowptr)+1, b, D, beta, c, D);  
+
+   nerr = doChecking<INDEXTYPE, VALUETYPE>(nnz, M, D, c0, c, D);
+
+   free(pc0);
+   free(pc);
+   free(pb);
+
    return(nerr);
 }
-
-
 
 /*
  * NOTE: 
@@ -411,13 +422,13 @@ double doTiming_Acsr_CacheFlushing
 
    if (nrep < 1) nrep = 1; // user repeatation 
 
-   fprintf(stderr, "nrep = %d, nset = %d\n", nrep, nset);
+   //fprintf(stderr, "nrep = %d, nset = %d\n", nrep, nset);
    
    start = omp_get_wtime();
    for (i=0, j=nset; i < nrep; i++)
    {
          //a1b1 kernel
-         CSR_KERNEL('N', M, N, D, 1.0, "GXXC", A.values, A.colids, 
+         CSR_KERNEL('N', M, D, N, 1.0, "GXXC", A.values, A.colids, 
             A.rowptr, A.rowptr+1, b, D, 1.0, c, D);   
          b += setsz; 
          c += setsz;
@@ -480,14 +491,14 @@ double doTiming_Acsr
 
    //CSR_KERNEL(M, D, N, A_csr, b, D, c, D);  // skip it's timing 
    //a1b1 kernel
-   CSR_KERNEL('N', M, N, D, 1.0, "GXXC", A.values, A.colids, 
+   CSR_KERNEL('N', M, D, N, 1.0, "GXXC", A.values, A.colids, 
               A.rowptr, A.rowptr+1, b, D, 1.0, c, D);   
    
    start = omp_get_wtime();
    for (i=0; i < nrep; i++)
    {
       //a1b1 kernel
-      CSR_KERNEL('N', M, N, D, 1.0, "GXXC", A.values, A.colids, 
+      CSR_KERNEL('N', M, D, N, 1.0, "GXXC", A.values, A.colids, 
                  A.rowptr, A.rowptr+1, b, D, 1.0, c, D);   
    }
    end = omp_get_wtime();
@@ -533,9 +544,12 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
    assert(N && M && D);
    if (isTest)
    {
-      fprintf(stderr, "starting testing ... M=%d, N=%d, D=%d\n", M, N, D);
+      // testing with same kernel to test the tester itself: sanity check  
+      //nerr = doTesting_Acsr<dcsrmm_IKJ_a1b1, dcsrmm_IKJ_a1b1>
+      //                      (A_csr0, M, N, D); 
       nerr = doTesting_Acsr<dcsrmm_IKJ_a1b1,dcsrmm_IKJ_D128_a1b1>
                             (A_csr0, M, N, D); 
+      
       if (!nerr)
          fprintf(stdout, "PASSED TEST\n");
       else
@@ -554,23 +568,25 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
          nrep);
    fprintf(stdout, "Trusted time = %e\n", t0); 
 #else
+   // base kernel 
    //t0 = doTiming_Acsr<Trusted_SDMM_CSR_IKJ>(A_csr0, M, N, D, csKB, nrep);
    t0 = doTiming_Acsr<dcsrmm_IKJ_a1b1>(A_csr0, M, N, D, csKB, nrep);
    //fprintf(stdout, "trusted time = %e\n", t0); 
-   
+  
+   // optimized kernel 
    //t1 = doTiming_Acsr<SDMM_CSR_IKJ_D128>(A_csr1, M, N, D, csKB, nrep);
    t1 = doTiming_Acsr<dcsrmm_IKJ_D128_a1b1>(A_csr1, M, N, D, csKB, nrep);
+   //t1 = doTiming_Acsr<dcsrmm_IKJ_a1b1>(A_csr0, M, N, D, csKB, nrep);
    //fprintf(stdout, "test time = %e\n", t1); 
-
 #endif
 
    //fprintf(stdout, "Speedup = %.2f\n", t0/t1); 
    
-   //fprintf(stdout, "Filename  \tNNZ \tM \tN \tD \ttrusted time \ttesttime  \tspeedup \n" );
+   fprintf(stdout, "Filename,      NNZ,   M,   N,   D,   trusted time,   testtime,      speedup \n" );
    //fprintf(stdout, "%s, \t%ld, \t%ld, \t%ld, \t%d, %e, %e, %.2f\n", 
    //      inputfile, A_csr0.nnz, M, N, D, t0, t1, t0/t1);
-   cout << inputfile << ",\t" << A_csr0.nnz << ",\t" << M << ",\t" << N 
-        << ",\t" << D << ",\t" << t0 << ",\t" << t1 << "   ,\t" << t0/t1 << endl;
+   cout << inputfile << ",      " << A_csr0.nnz << ",   " << M << ",   " << N 
+        << ",   " << D << ",   " << t0 << ",   " << t1 << "   ,      " << t0/t1 << endl;
 }
 
 int main(int narg, char **argv)

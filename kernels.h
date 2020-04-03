@@ -1,4 +1,3 @@
-#include "simd.h"
 
 #define DEBUG 1 
 
@@ -6,21 +5,6 @@
 
 
 
-#ifdef DEBUG
-void PrintVector(char*name, VTYPE v)
-{
-   int i;
-#ifdef DREAL 
-   double *fptr = (double*) &v;
-#else
-   float *fptr = (float*) &v;
-#endif
-   fprintf(stdout, "vector-%s: < ", name);
-   for (i=0; i < VLEN; i++)
-      fprintf(stdout, "%lf, ", fptr[i]);
-   fprintf(stdout, ">\n");
-}
-#endif
 
 /*=============================================================================
  *                            CSR_IKJ
@@ -46,15 +30,23 @@ void dcsrmm_IKJ_a1b1
    const INDEXTYPE ldc    // 2nd dimension size of b 
 )
 {
+#if 0
+   fprintf(stdout, "***** KERNEL: m=%d, n=%d, k=%d, ldb=%d, ldc=%d\n",
+           m, n, k, ldb, ldc);
+   fprintf(stdout, "          C = %p , B = %p , pntrb = %p , pntre = %p\n", 
+           C, B, pntrb, pntre);
+#endif
    for (INDEXTYPE i=0; i < m; i++)
    {
       INDEXTYPE ia0 = pntrb[i];
       INDEXTYPE ia1 = pntre[i]; 
-
+   
+      //fprintf(stdout, "--- ia0=%d, ia1=%d, ia1-ia0 = %d\n", ia0, ia1, ia1-ia0);
       for (INDEXTYPE kk=ia0; kk < ia1; kk++)
       {
          VALUETYPE a0 = val[kk];
          INDEXTYPE ja0 = indx[kk];
+
          for (INDEXTYPE j=0; j < n; j++)
             C[i*ldc+j] += a0 * B[ja0*ldb + j];  // row-major C  
       }

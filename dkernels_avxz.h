@@ -1,4 +1,23 @@
 
+#include "simd.h"
+
+#define DEBUG 1 
+
+#ifdef DEBUG
+void PrintVector(char*name, VTYPE v)
+{
+   int i;
+#ifdef DREAL 
+   double *fptr = (double*) &v;
+#else
+   float *fptr = (float*) &v;
+#endif
+   fprintf(stdout, "vector-%s: < ", name);
+   for (i=0; i < VLEN; i++)
+      fprintf(stdout, "%lf, ", fptr[i]);
+   fprintf(stdout, ">\n");
+}
+#endif
 /*
  * case: double precision, loop-order = IKJ, D=128, alpha=1.0, beta=1.0
  *       B & C row-major matrix and aligned to VLENb  
@@ -16,7 +35,7 @@ void dcsrmm_IKJ_D128_a1b1
    const INDEXTYPE *indx,  // colids -> column indices 
    const INDEXTYPE *pntrb, // starting index for rowptr
    const INDEXTYPE *pntre, // ending index for rowptr
-   const VALUETYPE *B,     // Dense B matrix
+   const double *B,     // Dense B matrix
    const INDEXTYPE ldb,   // 2nd dimension of b for zero-based indexing  
    const double beta,  // double scalar beta[0] 
    double *C,           // Dense matrix c
@@ -25,7 +44,7 @@ void dcsrmm_IKJ_D128_a1b1
 {
 /*
  * we consider only A->notrans case for now
- *    *transa == 'N' 
+ *    *transa == 'N' matdescra="GXXC" alpha=1.0 beta=1.0  
  */
    for (INDEXTYPE i=0; i < m; i++)
    {
@@ -139,7 +158,7 @@ void dcscmm_KIJ_D128_a1b1
    const INDEXTYPE *indx,  // rowids -> row indices 
    const INDEXTYPE *pntrb, // starting index for colptr
    const INDEXTYPE *pntre, // ending index for colptr
-   const VALUETYPE *B,     // Dense B matrix
+   const double *B,     // Dense B matrix
    const INDEXTYPE ldb,   // 2nd dimension of b for zero-based indexing  
    const double beta,  // double scalar beta[0] 
    double *C,           // Dense matrix c
