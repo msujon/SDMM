@@ -3,9 +3,9 @@ BIN = ./bin
 
 CC = g++
 
-# valgrind doesn't support avxz, to check memory error call with avx 
-#FLAGS = -g -fopenmp -O3 -mavx 
-
+#
+# flags needed to run mkl
+#
 MKLROOT = /opt/intel/mkl
 CC_MKL_FLAG = /DMKL_ILP64 -m64 -I${MKLROOT}/include
 LD_MKL_FLAG =  -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_ilp64.a \
@@ -14,7 +14,10 @@ LD_MKL_FLAG =  -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_ilp64.a \
 	       -lpthread -lm -ldl
 
 
-FLAGS = -g -fopenmp -O3 -march=native
+# valgrind doesn't support avx512, to check memory error call with avx 
+FLAGS = -g -fopenmp -O3 -mavx 
+#FLAGS = -g -fopenmp -O3 -march=native
+
 TOCOMPILE=
 LIBS=
 
