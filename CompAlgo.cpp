@@ -20,7 +20,7 @@
 #include "kernels.h" 
 
 
-#if 1  // defined in simd.h, skipping it to run valgrind which doesn't support AVX512 
+#if 1  // should be already defined in simd.h
    #ifndef VLEN
       #ifdef DREAL 
          #define VLEN 4
@@ -802,8 +802,8 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
    //fprintf(stdout, "trusted time = %e\n", t0); 
   
    // optimized kernel 
-   //t1 = doTiming_Acsr<dcsrmm_IKJ_D128_a1b1>(A_csr1, M, D, N, csKB, nrep);
-   t1 = doTiming_Acsr<dcsrmm_IKJ_a1b1>(A_csr1, M, D, N, csKB, nrep);
+   t1 = doTiming_Acsr<dcsrmm_IKJ_D128_a1b1>(A_csr1, M, D, N, csKB, nrep);
+   //t1 = doTiming_Acsr<dcsrmm_IKJ_a1b1>(A_csr1, M, D, N, csKB, nrep);
    //fprintf(stdout, "test time = %e\n", t1); 
 #endif
 

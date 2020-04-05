@@ -1,7 +1,7 @@
 
 #define DEBUG 1 
 
-//#include "dkernels_avxz.h"
+#include "dkernels_avxz.h"
 
 
 
