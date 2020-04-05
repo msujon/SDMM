@@ -20,7 +20,7 @@
 #include "kernels.h" 
 
 
-#if 1  // should be already defined in simd.h
+#if 1  // should already be defined in simd.h
    #ifndef VLEN
       #ifdef DREAL 
          #define VLEN 4
@@ -209,6 +209,7 @@ void MKL_csr_mm
    So, we need to copy those here  
 */
    // copying CSR data, we will skip this copy in timing  
+   MKL_INT M; 
    MKL_INT *rowptr;
    MKL_INT *col_indx;
    VALUETYPE *values; 
@@ -219,9 +220,14 @@ void MKL_csr_mm
 #endif
 
    // want to keep only one array for rowptr 
-   rowptr = (MKL_INT*) malloc((rows+1)*sizeof(MKL_INT));
+   //rowptr = (MKL_INT*) malloc((rows+1)*sizeof(MKL_INT));
+   
+   //M = rows; 
+   M = m; 
+   
+   rowptr = (MKL_INT*) malloc((M+1)*sizeof(MKL_INT)); // just allocate upto M
    assert(rowptr);
-   for (i=0; i < rows; i++)
+   for (i=0; i < M; i++)
       rowptr[i] = pntrb[i];
    rowptr[i] = pntre[i-1];
    
@@ -238,10 +244,10 @@ void MKL_csr_mm
    cout << "--- Running inspector for MKL" << endl;
 
 #ifdef DREAL 
-   stat = mkl_sparse_d_create_csr (&A, SPARSE_INDEX_BASE_ZERO, rows, cols, 
+   stat = mkl_sparse_d_create_csr (&A, SPARSE_INDEX_BASE_ZERO, M, cols, 
             rowptr, rowptr+1, col_indx, values);  
 #else
-   stat = mkl_sparse_s_create_csr (&A, SPARSE_INDEX_BASE_ZERO, rows, cols, 
+   stat = mkl_sparse_s_create_csr (&A, SPARSE_INDEX_BASE_ZERO, M, cols, 
             rowptr, rowptr+1, col_indx, values);  
 #endif
 
@@ -284,7 +290,7 @@ void MKL_csr_mm
       cout << "creating csr for MKL failed!";
       exit(1);
    }
-   cout << "---Done calling MKL's API" << endl;
+   cout << "--- Done calling MKL's API" << endl;
 /*
  * free all data 
  */
@@ -466,9 +472,11 @@ int doChecking(IT NNZA, IT M, IT N, NT *C, NT *D, IT ldc)
  *
  */
    EPS = Epsilon<NT>();
-   //cout << "--- EPS = " << EPS << endl; 
-   // the idea is how many flop one element needs 
-   ErrBound = 2 * (NNZA/N) * EPS; 
+   // the idea is how many flop one element needs, should be max degree
+   // avg degree is not perfect  
+   // ErrBound = 2 * (NNZA/N) * EPS; 
+   ErrBound = 2 * (NNZA) * EPS; 
+   cout << "--- EPS = " << EPS << " ErrBound = " << ErrBound << endl; 
    //cout << "--- ErrBound = " << ErrBound << " NNZ(A) = " << NNZA << " N = " << N  <<endl; 
    // row major! 
    for (i=0; i < M; i++)
@@ -480,7 +488,7 @@ int doChecking(IT NNZA, IT M, IT N, NT *C, NT *D, IT ldc)
          if (diff < 0.0) diff = -diff; 
          if (diff > ErrBound)
          {
-      #if 0
+      #if 1
             fprintf(stderr, "C(%d,%d) : expected=%e, got=%e, diff=%e\n",
                     i, j, C[k], D[k], diff);
       #else // print single value... 
@@ -511,6 +519,7 @@ int doTesting_Acsr(CSR<INDEXTYPE, VALUETYPE> &A, INDEXTYPE M, INDEXTYPE N,
    size_t i, szB, szC, ldc, ldb; 
    VALUETYPE *pb, *b, *pc0, *c0, *pc, *c;
    INDEXTYPE nnz=A.nnz;
+   VALUETYPE *values;  // want to generate random value  
 
    std::default_random_engine generator;
    std::uniform_real_distribution<double> distribution(0.0,1.0);
@@ -559,13 +568,21 @@ int doTesting_Acsr(CSR<INDEXTYPE, VALUETYPE> &A, INDEXTYPE M, INDEXTYPE N,
       c[i] = 0.0; c0[i] = 0.0;
    #endif
    }
+/*
+ * csr may consists all 1 as values... init with random values
+ */
+   values = (VALUETYPE*)malloc(A.nnz*sizeof(VALUETYPE));
+   assert(values);
+   for (i=0; i < A.nnz; i++)
+      values[i] = distribution(generator);  
+
    
    fprintf(stderr, "Applying trusted kernel\n");
-   trusted('N', M, N, K, alpha, "GXXC", A.nnz, A.rows, A.cols, A.values, 
+   trusted('N', M, N, K, alpha, "GXXC", A.nnz, A.rows, A.cols, values, 
            A.colids, A.rowptr, (A.rowptr)+1, b, ldb, beta, c0, ldc);   
    
    fprintf(stderr, "Applying test kernel\n");
-   test('N', M, N, K, alpha, "GXXC", A.nnz, A.rows, A.cols, A.values, A.colids, 
+   test('N', M, N, K, alpha, "GXXC", A.nnz, A.rows, A.cols, values, A.colids, 
             A.rowptr, (A.rowptr)+1, b, ldb, beta, c, ldc);  
 
    nerr = doChecking<INDEXTYPE, VALUETYPE>(nnz, M, N, c0, c, ldc);
@@ -663,9 +680,99 @@ double doTiming_Acsr_CacheFlushing
  * Assuming large working set, sizeof B+D > L3 cache 
  */
 template<csr_mm_t CSR_KERNEL>
-double doTiming_Acsr
+vector <double> doTiming_Acsr
 (
- CSR<INDEXTYPE, VALUETYPE> &A, 
+ const CSR<INDEXTYPE, VALUETYPE> &A, 
+ const INDEXTYPE M, 
+ const INDEXTYPE N, 
+ const INDEXTYPE K, 
+ const int csKB, 
+ const int nrep     /* if nrep == 0, nrep = number of wset fit in cache */
+ )
+{
+   int i, j;
+   vector <double> results; 
+   double start, end;
+   size_t szB, szC, ldb, ldc; 
+   VALUETYPE *pb, *b, *pc, *c;
+   INDEXTYPE *rowptr, *col_indx;
+   VALUETYPE *values;
+
+   std::default_random_engine generator;
+   std::uniform_real_distribution<double> distribution(0.0,1.0);
+
+   ldb = ldc = N; // considering both row-major   
+
+   szB = ((K*ldb+VLEN-1)/VLEN)*VLEN;  // szB in element
+   szC = ((M*ldc+VLEN-1)/VLEN)*VLEN;  // szC in element 
+
+   pb = (VALUETYPE*)malloc(szB*sizeof(VALUETYPE)+ATL_Cachelen);
+   assert(pb);
+   b = (VALUETYPE*) ATL_AlignPtr(pb);
+   
+   pc = (VALUETYPE*)malloc(szC*sizeof(VALUETYPE)+ATL_Cachelen);
+   assert(pc);
+   c = (VALUETYPE*) ATL_AlignPtr(pc); 
+   
+   for (i=0; i < szB; i++)
+      b[i] = distribution(generator);  
+   for (i=0; i < szC; i++)
+      c[i] = distribution(generator);  
+
+/*
+ * Copying the data to make it same as MKL timer... 
+ * We may use it later if we introduce an inspector phase 
+ */
+   rowptr = (INDEXTYPE*) malloc((M+1)*sizeof(INDEXTYPE));
+   assert(rowptr);
+   for (i=0; i < M+1; i++)
+      rowptr[i] = A.rowptr[i];
+   
+   col_indx = (INDEXTYPE*) malloc(A.nnz*sizeof(INDEXTYPE));
+   assert(col_indx);
+   for (i=0; i < A.nnz; i++)
+      col_indx[i] = A.colids[i]; 
+   
+   values = (VALUETYPE*) malloc(A.nnz*sizeof(VALUETYPE));
+   assert(col_indx);
+   for (i=0; i < A.nnz; i++)
+      values[i] = A.values[i]; 
+/*
+ * NOTE: with small working set, we should not skip the first iteration 
+ * (warm cache), because we want to time out of cache... 
+ * We run this timer either for in-cache data or large working set
+ * So we can safely skip 1st iteration... C will be in cache then
+ */
+
+   //CSR_KERNEL(M, D, N, A_csr, b, D, c, D);  // skip it's timing  
+   // no setup time for our kernel so far
+   results.push_back(0.0);
+   //a1b1 kernel
+   CSR_KERNEL('N', M, N, K, 1.0, "GXXC", A.nnz, A.rows, A.cols, values, 
+              col_indx, rowptr, rowptr+1, b, ldb, 1.0, c, ldc);   
+   
+   start = omp_get_wtime();
+   for (i=0; i < nrep; i++)
+   {
+      //a1b1 kernel
+      CSR_KERNEL('N', M, N, K, 1.0, "GXXC", A.nnz, A.rows, A.cols, A.values, 
+                 A.colids, A.rowptr, A.rowptr+1, b, ldb, 1.0, c, ldc);   
+   }
+   end = omp_get_wtime();
+   
+   results.push_back((end-start)/((double)nrep));
+   
+   free(pb);
+   free(pc);
+   
+   return(results);
+}
+/*
+ * Special timer for MKL to customize MKL's inspector-executor model
+ */
+vector<double> doTimingMKL_Acsr
+(
+ const CSR<INDEXTYPE, VALUETYPE> &A, 
  INDEXTYPE M, 
  INDEXTYPE N, 
  INDEXTYPE K, 
@@ -675,12 +782,22 @@ double doTiming_Acsr
 {
    int i, j;
    double start, end;
+   vector <double> results;  // don't use single precision, use double  
    size_t szB, szC, ldb, ldc; 
    VALUETYPE *pb, *b, *pc, *c;
+   // MKL related  
+   sparse_status_t stat; 
+   sparse_matrix_t Amkl = NULL; 
+   struct matrix_descr Adsc; 
+   MKL_INT *rowptr;
+   MKL_INT *col_indx;
+   VALUETYPE *values;
+   const VALUETYPE alpha = 1.0, beta = 1.0; 
 
    std::default_random_engine generator;
    std::uniform_real_distribution<double> distribution(0.0,1.0);
 
+   // initialize B and C 
    ldb = ldc = N; // considering both row-major   
 
    szB = ((K*ldb+VLEN-1)/VLEN)*VLEN;  // szB in element
@@ -706,30 +823,98 @@ double doTiming_Acsr
  * So we can safely skip 1st iteration... C will be in cache then
  */
 
-   //CSR_KERNEL(M, D, N, A_csr, b, D, c, D);  // skip it's timing 
-   //a1b1 kernel
-   CSR_KERNEL('N', M, N, K, 1.0, "GXXC", A.nnz, A.rows, A.cols, A.values, 
-              A.colids, A.rowptr, A.rowptr+1, b, ldb, 1.0, c, ldc);   
+/*
+ *    Setup MKL's data structure 
+ *    NOTE: there is no way to specify M in executor. So, we need to create csr
+ *    with smaller M 
+ */
+   rowptr = (MKL_INT*) malloc((M+1)*sizeof(MKL_INT));
+   assert(rowptr);
+   for (i=0; i < M+1; i++)
+      rowptr[i] = A.rowptr[i];
+   
+   col_indx = (MKL_INT*) malloc(A.nnz*sizeof(MKL_INT));
+   assert(col_indx);
+   for (i=0; i < A.nnz; i++)
+      col_indx[i] = A.colids[i]; 
+   
+   values = (VALUETYPE*) malloc(A.nnz*sizeof(VALUETYPE));
+   assert(col_indx);
+   for (i=0; i < A.nnz; i++)
+      values[i] = A.values[i]; 
+
+   // timing inspector phase 
+   {
+      start = omp_get_wtime();
+   #ifdef DREAL 
+      stat = mkl_sparse_d_create_csr (&Amkl, SPARSE_INDEX_BASE_ZERO, M, A.cols, 
+               rowptr, rowptr+1, col_indx, values);  
+   #else
+      stat = mkl_sparse_s_create_csr (&Amkl, SPARSE_INDEX_BASE_ZERO, M, A.cols, 
+               rowptr, rowptr+1, col_indx, values);  
+   #endif
+#if 0
+      if (stat != SPARSE_STATUS_SUCCESS)
+      {
+         cout << "creating csr for MKL failed!";
+         exit(1);
+      }
+#endif
+      end = omp_get_wtime();
+      results.push_back(end-start); // setup time 
+   }
+   
+   Adsc.type = SPARSE_MATRIX_TYPE_GENERAL;
+   //Adsc.fill // no need for general matrix  
+   //Adsc.diag =  SPARSE_DIAG_NON_UNIT;  // no need for general 
+  
+   // skiping first call 
+   #ifdef DREAL 
+      stat = mkl_sparse_d_mm (SPARSE_OPERATION_NON_TRANSPOSE, alpha, Amkl, Adsc, 
+                              SPARSE_LAYOUT_ROW_MAJOR, b, N, ldb, beta, c, ldc); 
+   #else
+      stat = mkl_sparse_s_mm (SPARSE_OPERATION_NON_TRANSPOSE, alpha, Amkl, Adsc, 
+                              SPARSE_LAYOUT_ROW_MAJOR, b, N, ldb, beta, c, ldc); 
+   #endif
+#if 0
+   if (stat != SPARSE_STATUS_SUCCESS)
+   {
+      cout << "creating csr for MKL failed!";
+      exit(1);
+   }
+#endif
    
    start = omp_get_wtime();
    for (i=0; i < nrep; i++)
    {
-      //a1b1 kernel
-      CSR_KERNEL('N', M, N, K, 1.0, "GXXC", A.nnz, A.rows, A.cols, A.values, 
-                 A.colids, A.rowptr, A.rowptr+1, b, ldb, 1.0, c, ldc);   
+   #ifdef DREAL 
+      stat = mkl_sparse_d_mm (SPARSE_OPERATION_NON_TRANSPOSE, alpha, Amkl, Adsc, 
+                              SPARSE_LAYOUT_ROW_MAJOR, b, N, ldb, beta, c, ldc); 
+   #else
+      stat = mkl_sparse_s_mm (SPARSE_OPERATION_NON_TRANSPOSE, alpha, Amkl, Adsc, 
+                              SPARSE_LAYOUT_ROW_MAJOR, b, N, ldb, beta, c, ldc); 
+   #endif
    }
    end = omp_get_wtime();
+   results.push_back((end-start)/((double)nrep)); // execution time 
    
+   free(rowptr);
+   free(col_indx);
+   free(values);
+   mkl_sparse_destroy(Amkl);
    free(pb);
    free(pc);
    
-   return((end-start)/((double)nrep));
+   return(results);
 }
+
+
 
 void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M, 
       int csKB, int nrep, int isTest)
 {
    int nerr;
+   vector<double> res0, res1; 
    INDEXTYPE N; /* A->MxN, B-> NxD, C-> MxD */ 
    double t0, t1, t2; 
    CSR<INDEXTYPE, VALUETYPE> A_csr0; 
@@ -798,22 +983,47 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
  * NOTE: general notation: A->MxK B->KxN, C->MxN
  *       SDMM with D     : A->MxN, B->NxD, C->MxD 
  */
-   t0 = doTiming_Acsr<dcsrmm_IKJ_a1b1>(A_csr0, M, D, N, csKB, nrep);
+   //t0 = doTiming_Acsr<dcsrmm_IKJ_a1b1>(A_csr0, M, D, N, csKB, nrep);
+  
+   //t0 = doTimingMKL_Acsr(A_csr0, M, D, N, csKB, nrep, 1);
+   res0 = doTimingMKL_Acsr(A_csr0, M, D, N, csKB, nrep);
    //fprintf(stdout, "trusted time = %e\n", t0); 
   
    // optimized kernel 
-   t1 = doTiming_Acsr<dcsrmm_IKJ_D128_a1b1>(A_csr1, M, D, N, csKB, nrep);
+   res1 = doTiming_Acsr<dcsrmm_IKJ_D128_a1b1>(A_csr1, M, D, N, csKB, nrep);
    //t1 = doTiming_Acsr<dcsrmm_IKJ_a1b1>(A_csr1, M, D, N, csKB, nrep);
    //fprintf(stdout, "test time = %e\n", t1); 
 #endif
-
-   //fprintf(stdout, "Speedup = %.2f\n", t0/t1); 
-   
-   fprintf(stdout, "Filename,      NNZ,   M,   N,   D,   trusted time,   testtime,      speedup \n" );
-   //fprintf(stdout, "%s, \t%ld, \t%ld, \t%ld, \t%d, %e, %e, %.2f\n", 
-   //      inputfile, A_csr0.nnz, M, N, D, t0, t1, t0/t1);
-   cout << inputfile << ",      " << A_csr0.nnz << ",   " << M << ",   " << N 
-        << ",   " << D << ",   " << t0 << ",   " << t1 << "   ,      " << t0/t1 << endl;
+#if 1
+   cout << "Filename,"
+        << "NNZ,"
+        << "M,"
+        << "N,"
+        << "D,"
+        << "Trusted_inspect_time,"
+        << "Trusted_exe_time,"
+        << "Test_inspect_time,"
+        << "Test_exe_time,"
+        << "Speedup_exe_time,"
+        << "Speedup_total,"
+        << "Critical_point" << endl;
+#endif
+   double critical_point = (res0[0]/(res1[1]-res0[1])) < 0.0 ?  -1.0 
+                                             : (res0[0]/(res1[1]-res0[1])); 
+   cout << inputfile << "," 
+        << A_csr0.nnz << "," 
+        << M << "," 
+        << N << "," 
+        << D << "," << std::scientific
+        << res0[0] << "," 
+        << res0[1] << "," 
+        << res1[0] << "," 
+        << res1[1] << "," 
+        << std::fixed << std::showpoint
+        << res0[1]/res1[1] << ","
+        << ((res0[0]+res0[1])/(res1[0]+res1[1])) << ","  
+        << critical_point
+        << endl;
 }
 
 int main(int narg, char **argv)
