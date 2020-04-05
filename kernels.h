@@ -19,6 +19,9 @@ void dcsrmm_IKJ_a1b1
    const VALUETYPE alpha, // double scalar ?? why ptr 
    const char *matdescra,  // 6 characr array descriptor for A:
                            // [G/S/H/T/A/D],[L/U],[N/U],[F/C] -> [G,X,X,C] 
+   const INDEXTYPE nnz,   // nonzeros: need to recreate csr with mkl 
+   const INDEXTYPE rows,  // number of rows
+   const INDEXTYPE cols,  // number of columns 
    const VALUETYPE *val,   // NNZ value  
    const INDEXTYPE *indx,  // colids -> column indices 
    const INDEXTYPE *pntrb, // starting index for rowptr
@@ -66,6 +69,9 @@ void dcscmm_KIJ_a1b1
    const double alpha, // double scalar ?? why ptr 
    const char *matdescra,  // 6 characr array descriptor for A:
                            // [G/S/H/T/A/D],[L/U],[N/U],[F/C] -> [G,X,X,C] 
+   const INDEXTYPE nnz,   // nonzeros: need to recreate csr with mkl 
+   const INDEXTYPE rows,  // number of rows
+   const INDEXTYPE cols,  // number of columns 
    const double *val,   // NNZ value  
    const INDEXTYPE *indx,  // rowids -> row indices 
    const INDEXTYPE *pntrb, // starting index for colptr
