@@ -8,6 +8,9 @@
 #include "utility.h"
 
 #define INDEXTYPE int
+//#define INDEXTYPE long long
+
+
 #define VALUETYPE double 
 #define DREAL 1 
 
@@ -18,8 +21,12 @@
 
 
 #if 1  // defined in simd.h, skipping it to run valgrind which doesn't support AVX512 
-   #ifndef VLEN 
-      #define VLEN 8
+   #ifndef VLEN
+      #ifdef DREAL 
+         #define VLEN 4
+      #else // SREAL 
+         #define VLEN 8
+      #endif
    #endif
 #endif
 
@@ -27,7 +34,7 @@
  *                   API FOR ALL CSR & CSC BASED KERNELS
  *                   ------------------------------------
  * NOTE:
- * 1. It is actually on MKL's old API  
+ * 1. It is actually based on MKL's old API  
  * 2. only supports zero based index so far, will extend it later
  * 3. m,n,k can be different than actually rows, cols of matrix 
  *============================================================================*/
@@ -811,8 +818,8 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
 
 int main(int narg, char **argv)
 {
-   INDEXTYPE D, M, isTest; 
-   int option, csKB, nrep;
+   INDEXTYPE D, M; 
+   int option, csKB, nrep, isTest;
    string inputfile; 
    GetFlags(narg, argv, inputfile, option, D, M, csKB, nrep, isTest);
    GetSpeedup(inputfile, option, D, M, csKB, nrep, isTest);
