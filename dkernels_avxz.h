@@ -49,6 +49,9 @@ void dcsrmm_IKJ_D128_a1b1
  * we consider only A->notrans case for now
  *    *transa == 'N' matdescra="GXXC" alpha=1.0 beta=1.0  
  */
+#ifdef PTTIME
+   #pragma omp parallel for schedule(static)
+#endif
    for (INDEXTYPE i=0; i < m; i++)
    {
       INDEXTYPE ia0 = pntrb[i];
@@ -171,6 +174,9 @@ void dcscmm_KIJ_D128_a1b1
    const INDEXTYPE ldc    // 2nd dimension size of b 
 )
 {
+#ifdef PTTIME
+   // FIXME: Not implemented yet  
+#endif
    for (INDEXTYPE kk=0; kk < k; kk++)
    {
       VTYPE VB0, VB1, VB2, VB3, VB4, VB5, VB6, VB7, 
