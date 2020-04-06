@@ -302,7 +302,6 @@ void MKL_csr_mm
 
 #endif 
 
-
 /*
  * some misc definition: will move to another file later 
  *    from ATLAS 
@@ -380,12 +379,13 @@ void Usage()
    printf("-C <number>, Cachesize in KB to flush it for small workset \n");
    printf("-nrep <number>, number of repeatation \n");
    printf("-T <0,1>, 1 means, run tester as well  \n");
+   printf("-skHd<1>, 1 means, skip header of the printed results  \n");
    printf("-h, show this usage message  \n");
 
 }
 
 void GetFlags(int narg, char **argv, string &inputfile, int &option, 
-      INDEXTYPE &D, INDEXTYPE &M, int &csKB, int &nrep, int &isTest)
+      INDEXTYPE &D, INDEXTYPE &M, int &csKB, int &nrep, int &isTest, int &skHd)
 {
    option = 1; 
    inputfile = "";
@@ -394,6 +394,7 @@ void GetFlags(int narg, char **argv, string &inputfile, int &option,
    M = 0;
    isTest = 0; 
    nrep = 1;
+   skHd = 0; // by default print header
    //csKB = 1024; // L2 in KB 
    csKB = 25344; // L3 in KB 
 
@@ -426,6 +427,10 @@ void GetFlags(int narg, char **argv, string &inputfile, int &option,
       else if(strcmp(argv[p], "-T") == 0)
       {
 	 isTest = atoi(argv[p+1]);
+      }
+      else if(strcmp(argv[p], "-skHd") == 0)
+      {
+	 skHd = atoi(argv[p+1]);
       }
       else if(strcmp(argv[p], "-h") == 0)
       {
@@ -1014,7 +1019,7 @@ vector<double> doTimingMKL_Acsr
 
 
 void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M, 
-      int csKB, int nrep, int isTest)
+      int csKB, int nrep, int isTest, int skipHeader)
 {
    int nerr;
    vector<double> res0, res1; 
@@ -1061,7 +1066,7 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
       //nerr = doTesting_Acsr<dcsrmm_IKJ_a1b1,dcsrmm_IKJ_D128_a1b1>
       //                      (A_csr0, M, D, N); 
       
-      nerr = doTesting_Acsr<dcsrmm_IKJ_a1b1, MKL_csr_mm>
+      nerr = doTesting_Acsr<dcsrmm_IKJ_D128_a1b1, MKL_csr_mm>
                             (A_csr0, M, D, N); 
       if (!nerr)
          fprintf(stdout, "PASSED TEST\n");
@@ -1097,20 +1102,25 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
    //t1 = doTiming_Acsr<dcsrmm_IKJ_a1b1>(A_csr1, M, D, N, csKB, nrep);
    //fprintf(stdout, "test time = %e\n", t1); 
 #endif
-#if 1
-   cout << "Filename,"
-        << "NNZ,"
-        << "M,"
-        << "N,"
-        << "D,"
-        << "Trusted_inspect_time,"
-        << "Trusted_exe_time,"
-        << "Test_inspect_time,"
-        << "Test_exe_time,"
-        << "Speedup_exe_time,"
-        << "Speedup_total,"
-        << "Critical_point" << endl;
-#endif
+   
+   //cout << "skipHeader: " << skipHeader << endl;
+
+   if(!skipHeader) 
+   {
+      cout << "Filename,"
+         << "NNZ,"
+         << "M,"
+         << "N,"
+         << "D,"
+         << "Trusted_inspect_time,"
+         << "Trusted_exe_time,"
+         << "Test_inspect_time,"
+         << "Test_exe_time,"
+         << "Speedup_exe_time,"
+         << "Speedup_total,"
+         << "Critical_point" << endl;
+   }
+   
    double critical_point = (res0[0]/(res1[1]-res0[1])) < 0.0 ?  -1.0 
                                              : (res0[0]/(res1[1]-res0[1])); 
    cout << inputfile << "," 
@@ -1132,10 +1142,10 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
 int main(int narg, char **argv)
 {
    INDEXTYPE D, M; 
-   int option, csKB, nrep, isTest;
+   int option, csKB, nrep, isTest, skHd;
    string inputfile; 
-   GetFlags(narg, argv, inputfile, option, D, M, csKB, nrep, isTest);
-   GetSpeedup(inputfile, option, D, M, csKB, nrep, isTest);
+   GetFlags(narg, argv, inputfile, option, D, M, csKB, nrep, isTest, skHd);
+   GetSpeedup(inputfile, option, D, M, csKB, nrep, isTest, skHd);
    return 0;
 }
 
