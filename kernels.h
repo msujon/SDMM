@@ -55,6 +55,51 @@ void dcsrmm_IKJ_a1b1
       }
    }
 }
+/*
+ * alpha=X, beta=X, not optimized at all  
+ */
+void dcsrmm_IKJ_aXbX   
+(
+   const char transa,     // 'N', 'T' , 'C' 
+   const INDEXTYPE m,     // number of rows of A 
+   const INDEXTYPE n,     // number of cols of C
+   const INDEXTYPE k,     // number of cols of A
+   const VALUETYPE alpha, // double scalar ?? why ptr 
+   const char *matdescra,  // 6 characr array descriptor for A:
+                           // [G/S/H/T/A/D],[L/U],[N/U],[F/C] -> [G,X,X,C] 
+   const INDEXTYPE nnz,   // nonzeros: need to recreate csr with mkl 
+   const INDEXTYPE rows,  // number of rows
+   const INDEXTYPE cols,  // number of columns 
+   const VALUETYPE *val,   // NNZ value  
+   const INDEXTYPE *indx,  // colids -> column indices 
+   const INDEXTYPE *pntrb, // starting index for rowptr
+   const INDEXTYPE *pntre, // ending index for rowptr
+   const VALUETYPE *B,     // Dense B matrix
+   const INDEXTYPE ldb,   // 2nd dimension of b for zero-based indexing  
+   const VALUETYPE beta,  // double scalar beta[0] 
+   VALUETYPE *C,           // Dense matrix c
+   const INDEXTYPE ldc    // 2nd dimension size of b 
+)
+{
+   for (INDEXTYPE i=0; i < m; i++)
+   {
+      INDEXTYPE ia0 = pntrb[i];
+      INDEXTYPE ia1 = pntre[i]; 
+   
+      // update with beta first
+      for (INDEXTYPE j=0; j < n; j++)
+            C[i*ldc+j] = beta * C[i*ldc+j];
+
+      for (INDEXTYPE kk=ia0; kk < ia1; kk++)
+      {
+         VALUETYPE a0 = alpha * val[kk];
+         INDEXTYPE ja0 = indx[kk];
+
+         for (INDEXTYPE j=0; j < n; j++)
+            C[i*ldc+j] += a0 * B[ja0*ldb + j];  // row-major C  
+      }
+   }
+}
 
 /*============================================================================
  *                            CSC_KIJ 

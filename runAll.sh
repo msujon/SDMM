@@ -14,6 +14,8 @@ m=256
 d=128 
 isPTtime=1
 nrep=10
+ialpha=2
+ibeta=2
 
 #commandline argument 
 
@@ -24,6 +26,8 @@ Options:
 -M [val]    value of M (default 256)
 -p [1/0]    time parallel version (default parallel varsion)
 -r [val]    number of repeatation (default 10) 
+-a [0,1,2]  value of alpha: 0,0, 1.0, X (default X) 
+-b [0,1,2]  value of beta: 0,0, 1.0, X (default X) 
 --help      display help and exit
 "
 
@@ -71,13 +75,13 @@ then
    Mstr="_allM"
 else
    Mval="-M $m"  #by default all 
-   Mstr="_${M}"
+   Mstr="_M${m}"
 fi
 
 for dset in $dsets
 do
    FILES=${mdir}/${dset}/*.mtx 
-   res=${resdir}/${dset}${Mstr}${par}.csv
+   res=${resdir}/${dset}${Mstr}_a${ialpha}b${ibeta}${par}.csv
    
    echo "FILENAME,NNZ,M,N,D,Trusted_inspect_time,trusted_exe_time,Test_inspect_time,Test_exe_time,Speedup_exe_time,Speedup_total_time,Critical_point" > $res
    
@@ -85,7 +89,7 @@ do
    do 
       #echo "$file"
       ./bin/CompAlgo${par} -input $file $Mval -D $d -nrep $nrep -skHd 1 \
-         | tee -a $res 
+         -ialpha $ialpha -ibeta $ibeta | tee -a $res 
    done
 done
 
