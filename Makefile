@@ -34,6 +34,9 @@ FLAGS = -fopenmp -O3 -march=native -std=c++11
 TOCOMPILE=
 LIBS=
 
+#INCLUDE = simd.h kernels.h dkernels_avxz.h 
+INCLUDE =  
+
 #
 ##
 #
@@ -42,21 +45,21 @@ all: $(BIN)/CompAlgo $(BIN)/CompAlgo_pt
 $(BIN)/%: $(SAMPLE)/%.cpp
 	mkdir -p $(BIN)
 	$(CC) $(FLAGS) $(INCLUDE) $(CC_MKL_FLAG) -o $@ $^ -DCPP \
-	   -DHW_EXE ${TOCOMPILE} ${LIBS} $(LD_MKL_FLAG)
+	   -DHW_EXE $(TOCOMPILE) $(LIBS) $(LD_MKL_FLAG)
 
-$(BIN)/CompAlgo: CompAlgo.cpp 
+$(BIN)/CompAlgo: CompAlgo.cpp $(INCLUDE) 
 	mkdir -p $(BIN)
 	$(CC) $(FLAGS) $(INCLUDE) $(CC_MKL_FLAG) -o $@ $^ -DCPP \
-	   ${TOCOMPILE} ${LIBS} $(LD_MKL_FLAG)
+	   $(TOCOMPILE) $(LIBS) $(LD_MKL_FLAG)
 
 #
 ## parallel version 
 #
 
-$(BIN)/CompAlgo_pt: CompAlgo.cpp 
+$(BIN)/CompAlgo_pt: CompAlgo.cpp $(INCLUDE)
 	mkdir -p $(BIN)
 	$(CC) $(FLAGS) $(INCLUDE) $(MYPT_FLAG) $(PT_CC_MKL_FLAG) -o $@ $^ -DCPP \
-	   ${TOCOMPILE} ${LIBS} $(PT_LD_MKL_FLAG)
+	   $(TOCOMPILE) $(LIBS) $(PT_LD_MKL_FLAG)
 clean:
 	rm -rf ./bin/*
 

@@ -18,6 +18,16 @@ void PrintVector(char*name, VTYPE v)
    fprintf(stdout, ">\n");
 }
 #endif
+
+
+//#ifdef ALIGNED
+#if 1
+   #define BCL_VLD BCL_vld 
+   #define BCL_VST BCL_vst 
+#else
+   #define BCL_VLD BCL_vldu 
+   #define BCL_VST BCL_vstu 
+#endif
 /*
  * case: double precision, loop-order = IKJ, D=128, alpha=1.0, beta=1.0
  *       B & C row-major matrix and aligned to VLENb  
@@ -64,22 +74,22 @@ void dcsrmm_IKJ_D128_a1b1
 /*
  *    Assumption: C is aligned by VLENb, use vldu otherwise  
  */
-      BCL_vld(VC0, C+i*ldc+VLEN*0); 
-      BCL_vld(VC1, C+i*ldc+VLEN*1); 
-      BCL_vld(VC2, C+i*ldc+VLEN*2); 
-      BCL_vld(VC3, C+i*ldc+VLEN*3); 
-      BCL_vld(VC4, C+i*ldc+VLEN*4); 
-      BCL_vld(VC5, C+i*ldc+VLEN*5); 
-      BCL_vld(VC6, C+i*ldc+VLEN*6); 
-      BCL_vld(VC7, C+i*ldc+VLEN*7); 
-      BCL_vld(VC8, C+i*ldc+VLEN*8); 
-      BCL_vld(VC9, C+i*ldc+VLEN*9); 
-      BCL_vld(VC10, C+i*ldc+VLEN*10); 
-      BCL_vld(VC11, C+i*ldc+VLEN*11); 
-      BCL_vld(VC12, C+i*ldc+VLEN*12); 
-      BCL_vld(VC13, C+i*ldc+VLEN*13); 
-      BCL_vld(VC14, C+i*ldc+VLEN*14); 
-      BCL_vld(VC15, C+i*ldc+VLEN*15); 
+      BCL_VLD(VC0, C+i*ldc+VLEN*0); 
+      BCL_VLD(VC1, C+i*ldc+VLEN*1); 
+      BCL_VLD(VC2, C+i*ldc+VLEN*2); 
+      BCL_VLD(VC3, C+i*ldc+VLEN*3); 
+      BCL_VLD(VC4, C+i*ldc+VLEN*4); 
+      BCL_VLD(VC5, C+i*ldc+VLEN*5); 
+      BCL_VLD(VC6, C+i*ldc+VLEN*6); 
+      BCL_VLD(VC7, C+i*ldc+VLEN*7); 
+      BCL_VLD(VC8, C+i*ldc+VLEN*8); 
+      BCL_VLD(VC9, C+i*ldc+VLEN*9); 
+      BCL_VLD(VC10, C+i*ldc+VLEN*10); 
+      BCL_VLD(VC11, C+i*ldc+VLEN*11); 
+      BCL_VLD(VC12, C+i*ldc+VLEN*12); 
+      BCL_VLD(VC13, C+i*ldc+VLEN*13); 
+      BCL_VLD(VC14, C+i*ldc+VLEN*14); 
+      BCL_VLD(VC15, C+i*ldc+VLEN*15); 
       
       for (INDEXTYPE kk=ia0; kk < ia1; kk++)
       {
@@ -90,22 +100,22 @@ void dcsrmm_IKJ_D128_a1b1
          INDEXTYPE ja0 = indx[kk];
          
          BCL_vset1(VA0, a0);
-         BCL_vld(VB0, B+ja0*ldb+VLEN*0); 
-         BCL_vld(VB1, B+ja0*ldb+VLEN*1); 
-         BCL_vld(VB2, B+ja0*ldb+VLEN*2); 
-         BCL_vld(VB3, B+ja0*ldb+VLEN*3); 
-         BCL_vld(VB4, B+ja0*ldb+VLEN*4); 
-         BCL_vld(VB5, B+ja0*ldb+VLEN*5); 
-         BCL_vld(VB6, B+ja0*ldb+VLEN*6); 
-         BCL_vld(VB7, B+ja0*ldb+VLEN*7); 
-         BCL_vld(VB8, B+ja0*ldb+VLEN*8); 
-         BCL_vld(VB9, B+ja0*ldb+VLEN*9); 
-         BCL_vld(VB10, B+ja0*ldb+VLEN*10); 
-         BCL_vld(VB11, B+ja0*ldb+VLEN*11); 
-         BCL_vld(VB12, B+ja0*ldb+VLEN*12); 
-         BCL_vld(VB13, B+ja0*ldb+VLEN*13); 
-         BCL_vld(VB14, B+ja0*ldb+VLEN*14); 
-         BCL_vld(VB15, B+ja0*ldb+VLEN*15); 
+         BCL_VLD(VB0, B+ja0*ldb+VLEN*0); 
+         BCL_VLD(VB1, B+ja0*ldb+VLEN*1); 
+         BCL_VLD(VB2, B+ja0*ldb+VLEN*2); 
+         BCL_VLD(VB3, B+ja0*ldb+VLEN*3); 
+         BCL_VLD(VB4, B+ja0*ldb+VLEN*4); 
+         BCL_VLD(VB5, B+ja0*ldb+VLEN*5); 
+         BCL_VLD(VB6, B+ja0*ldb+VLEN*6); 
+         BCL_VLD(VB7, B+ja0*ldb+VLEN*7); 
+         BCL_VLD(VB8, B+ja0*ldb+VLEN*8); 
+         BCL_VLD(VB9, B+ja0*ldb+VLEN*9); 
+         BCL_VLD(VB10, B+ja0*ldb+VLEN*10); 
+         BCL_VLD(VB11, B+ja0*ldb+VLEN*11); 
+         BCL_VLD(VB12, B+ja0*ldb+VLEN*12); 
+         BCL_VLD(VB13, B+ja0*ldb+VLEN*13); 
+         BCL_VLD(VB14, B+ja0*ldb+VLEN*14); 
+         BCL_VLD(VB15, B+ja0*ldb+VLEN*15); 
        
          BCL_vmac(VC0, VA0, VB0); 
          BCL_vmac(VC1, VA0, VB1); 
@@ -124,22 +134,22 @@ void dcsrmm_IKJ_D128_a1b1
          BCL_vmac(VC14, VA0, VB14);
          BCL_vmac(VC15, VA0, VB15); 
       }
-      BCL_vst(C+i*ldc+VLEN*0, VC0); 
-      BCL_vst(C+i*ldc+VLEN*1, VC1); 
-      BCL_vst(C+i*ldc+VLEN*2, VC2); 
-      BCL_vst(C+i*ldc+VLEN*3, VC3); 
-      BCL_vst(C+i*ldc+VLEN*4, VC4); 
-      BCL_vst(C+i*ldc+VLEN*5, VC5); 
-      BCL_vst(C+i*ldc+VLEN*6, VC6); 
-      BCL_vst(C+i*ldc+VLEN*7, VC7); 
-      BCL_vst(C+i*ldc+VLEN*8, VC8); 
-      BCL_vst(C+i*ldc+VLEN*9, VC9); 
-      BCL_vst(C+i*ldc+VLEN*10, VC10); 
-      BCL_vst(C+i*ldc+VLEN*11, VC11); 
-      BCL_vst(C+i*ldc+VLEN*12, VC12); 
-      BCL_vst(C+i*ldc+VLEN*13, VC13); 
-      BCL_vst(C+i*ldc+VLEN*14, VC14); 
-      BCL_vst(C+i*ldc+VLEN*15, VC15); 
+      BCL_VST(C+i*ldc+VLEN*0, VC0); 
+      BCL_VST(C+i*ldc+VLEN*1, VC1); 
+      BCL_VST(C+i*ldc+VLEN*2, VC2); 
+      BCL_VST(C+i*ldc+VLEN*3, VC3); 
+      BCL_VST(C+i*ldc+VLEN*4, VC4); 
+      BCL_VST(C+i*ldc+VLEN*5, VC5); 
+      BCL_VST(C+i*ldc+VLEN*6, VC6); 
+      BCL_VST(C+i*ldc+VLEN*7, VC7); 
+      BCL_VST(C+i*ldc+VLEN*8, VC8); 
+      BCL_VST(C+i*ldc+VLEN*9, VC9); 
+      BCL_VST(C+i*ldc+VLEN*10, VC10); 
+      BCL_VST(C+i*ldc+VLEN*11, VC11); 
+      BCL_VST(C+i*ldc+VLEN*12, VC12); 
+      BCL_VST(C+i*ldc+VLEN*13, VC13); 
+      BCL_VST(C+i*ldc+VLEN*14, VC14); 
+      BCL_VST(C+i*ldc+VLEN*15, VC15); 
    }
 }
 /*
@@ -216,22 +226,22 @@ void dcsrmm_IKJ_D128_aXbX
          INDEXTYPE ja0 = indx[kk];
          
          BCL_vset1(VA0, a0);
-         BCL_vld(VB0, B+ja0*ldb+VLEN*0); 
-         BCL_vld(VB1, B+ja0*ldb+VLEN*1); 
-         BCL_vld(VB2, B+ja0*ldb+VLEN*2); 
-         BCL_vld(VB3, B+ja0*ldb+VLEN*3); 
-         BCL_vld(VB4, B+ja0*ldb+VLEN*4); 
-         BCL_vld(VB5, B+ja0*ldb+VLEN*5); 
-         BCL_vld(VB6, B+ja0*ldb+VLEN*6); 
-         BCL_vld(VB7, B+ja0*ldb+VLEN*7); 
-         BCL_vld(VB8, B+ja0*ldb+VLEN*8); 
-         BCL_vld(VB9, B+ja0*ldb+VLEN*9); 
-         BCL_vld(VB10, B+ja0*ldb+VLEN*10); 
-         BCL_vld(VB11, B+ja0*ldb+VLEN*11); 
-         BCL_vld(VB12, B+ja0*ldb+VLEN*12); 
-         BCL_vld(VB13, B+ja0*ldb+VLEN*13); 
-         BCL_vld(VB14, B+ja0*ldb+VLEN*14); 
-         BCL_vld(VB15, B+ja0*ldb+VLEN*15); 
+         BCL_VLD(VB0, B+ja0*ldb+VLEN*0); 
+         BCL_VLD(VB1, B+ja0*ldb+VLEN*1); 
+         BCL_VLD(VB2, B+ja0*ldb+VLEN*2); 
+         BCL_VLD(VB3, B+ja0*ldb+VLEN*3); 
+         BCL_VLD(VB4, B+ja0*ldb+VLEN*4); 
+         BCL_VLD(VB5, B+ja0*ldb+VLEN*5); 
+         BCL_VLD(VB6, B+ja0*ldb+VLEN*6); 
+         BCL_VLD(VB7, B+ja0*ldb+VLEN*7); 
+         BCL_VLD(VB8, B+ja0*ldb+VLEN*8); 
+         BCL_VLD(VB9, B+ja0*ldb+VLEN*9); 
+         BCL_VLD(VB10, B+ja0*ldb+VLEN*10); 
+         BCL_VLD(VB11, B+ja0*ldb+VLEN*11); 
+         BCL_VLD(VB12, B+ja0*ldb+VLEN*12); 
+         BCL_VLD(VB13, B+ja0*ldb+VLEN*13); 
+         BCL_VLD(VB14, B+ja0*ldb+VLEN*14); 
+         BCL_VLD(VB15, B+ja0*ldb+VLEN*15); 
        
          BCL_vmac(VC0, VA0, VB0); 
          BCL_vmac(VC1, VA0, VB1); 
@@ -255,25 +265,25 @@ void dcsrmm_IKJ_D128_aXbX
       BCL_vset1(Vbeta, beta);
       
 /*
- *    Assumption: C is aligned by VLENb, use vldu otherwise  
+ *    Assumption: C is aligned by VLENb, use VLDu otherwise  
  */
       // t = [C]
-      BCL_vld(tVC0, C+i*ldc+VLEN*0); 
-      BCL_vld(tVC1, C+i*ldc+VLEN*1); 
-      BCL_vld(tVC2, C+i*ldc+VLEN*2); 
-      BCL_vld(tVC3, C+i*ldc+VLEN*3); 
-      BCL_vld(tVC4, C+i*ldc+VLEN*4); 
-      BCL_vld(tVC5, C+i*ldc+VLEN*5); 
-      BCL_vld(tVC6, C+i*ldc+VLEN*6); 
-      BCL_vld(tVC7, C+i*ldc+VLEN*7); 
-      BCL_vld(tVC8, C+i*ldc+VLEN*8); 
-      BCL_vld(tVC9, C+i*ldc+VLEN*9); 
-      BCL_vld(tVC10, C+i*ldc+VLEN*10); 
-      BCL_vld(tVC11, C+i*ldc+VLEN*11); 
-      BCL_vld(tVC12, C+i*ldc+VLEN*12); 
-      BCL_vld(tVC13, C+i*ldc+VLEN*13); 
-      BCL_vld(tVC14, C+i*ldc+VLEN*14); 
-      BCL_vld(tVC15, C+i*ldc+VLEN*15); 
+      BCL_VLD(tVC0, C+i*ldc+VLEN*0); 
+      BCL_VLD(tVC1, C+i*ldc+VLEN*1); 
+      BCL_VLD(tVC2, C+i*ldc+VLEN*2); 
+      BCL_VLD(tVC3, C+i*ldc+VLEN*3); 
+      BCL_VLD(tVC4, C+i*ldc+VLEN*4); 
+      BCL_VLD(tVC5, C+i*ldc+VLEN*5); 
+      BCL_VLD(tVC6, C+i*ldc+VLEN*6); 
+      BCL_VLD(tVC7, C+i*ldc+VLEN*7); 
+      BCL_VLD(tVC8, C+i*ldc+VLEN*8); 
+      BCL_VLD(tVC9, C+i*ldc+VLEN*9); 
+      BCL_VLD(tVC10, C+i*ldc+VLEN*10); 
+      BCL_VLD(tVC11, C+i*ldc+VLEN*11); 
+      BCL_VLD(tVC12, C+i*ldc+VLEN*12); 
+      BCL_VLD(tVC13, C+i*ldc+VLEN*13); 
+      BCL_VLD(tVC14, C+i*ldc+VLEN*14); 
+      BCL_VLD(tVC15, C+i*ldc+VLEN*15); 
 
       // t = beta * t
       BCL_vmul(tVC0, Vbeta, tVC0); 
@@ -313,22 +323,22 @@ void dcsrmm_IKJ_D128_aXbX
       BCL_vmac(tVC15, Valpha, VC15); 
 
       // [C] = t
-      BCL_vst(C+i*ldc+VLEN*0, tVC0); 
-      BCL_vst(C+i*ldc+VLEN*1, tVC1); 
-      BCL_vst(C+i*ldc+VLEN*2, tVC2); 
-      BCL_vst(C+i*ldc+VLEN*3, tVC3); 
-      BCL_vst(C+i*ldc+VLEN*4, tVC4); 
-      BCL_vst(C+i*ldc+VLEN*5, tVC5); 
-      BCL_vst(C+i*ldc+VLEN*6, tVC6); 
-      BCL_vst(C+i*ldc+VLEN*7, tVC7); 
-      BCL_vst(C+i*ldc+VLEN*8, tVC8); 
-      BCL_vst(C+i*ldc+VLEN*9, tVC9); 
-      BCL_vst(C+i*ldc+VLEN*10, tVC10); 
-      BCL_vst(C+i*ldc+VLEN*11, tVC11); 
-      BCL_vst(C+i*ldc+VLEN*12, tVC12); 
-      BCL_vst(C+i*ldc+VLEN*13, tVC13); 
-      BCL_vst(C+i*ldc+VLEN*14, tVC14); 
-      BCL_vst(C+i*ldc+VLEN*15, tVC15); 
+      BCL_VST(C+i*ldc+VLEN*0, tVC0); 
+      BCL_VST(C+i*ldc+VLEN*1, tVC1); 
+      BCL_VST(C+i*ldc+VLEN*2, tVC2); 
+      BCL_VST(C+i*ldc+VLEN*3, tVC3); 
+      BCL_VST(C+i*ldc+VLEN*4, tVC4); 
+      BCL_VST(C+i*ldc+VLEN*5, tVC5); 
+      BCL_VST(C+i*ldc+VLEN*6, tVC6); 
+      BCL_VST(C+i*ldc+VLEN*7, tVC7); 
+      BCL_VST(C+i*ldc+VLEN*8, tVC8); 
+      BCL_VST(C+i*ldc+VLEN*9, tVC9); 
+      BCL_VST(C+i*ldc+VLEN*10, tVC10); 
+      BCL_VST(C+i*ldc+VLEN*11, tVC11); 
+      BCL_VST(C+i*ldc+VLEN*12, tVC12); 
+      BCL_VST(C+i*ldc+VLEN*13, tVC13); 
+      BCL_VST(C+i*ldc+VLEN*14, tVC14); 
+      BCL_VST(C+i*ldc+VLEN*15, tVC15); 
    }
 }
 
@@ -374,22 +384,22 @@ void dcscmm_KIJ_D128_a1b1
       INDEXTYPE ja0 = pntrb[kk];
       INDEXTYPE ja1 = pntre[kk]; 
 
-         BCL_vld(VB0, B+k*ldb+VLEN*0); 
-         BCL_vld(VB1, B+k*ldb+VLEN*1); 
-         BCL_vld(VB2, B+k*ldb+VLEN*2); 
-         BCL_vld(VB3, B+k*ldb+VLEN*3); 
-         BCL_vld(VB4, B+k*ldb+VLEN*4); 
-         BCL_vld(VB5, B+k*ldb+VLEN*5); 
-         BCL_vld(VB6, B+k*ldb+VLEN*6); 
-         BCL_vld(VB7, B+k*ldb+VLEN*7); 
-         BCL_vld(VB8, B+k*ldb+VLEN*8); 
-         BCL_vld(VB9, B+k*ldb+VLEN*9); 
-         BCL_vld(VB10, B+k*ldb+VLEN*10); 
-         BCL_vld(VB11, B+k*ldb+VLEN*11); 
-         BCL_vld(VB12, B+k*ldb+VLEN*12); 
-         BCL_vld(VB13, B+k*ldb+VLEN*13); 
-         BCL_vld(VB14, B+k*ldb+VLEN*14); 
-         BCL_vld(VB15, B+k*ldb+VLEN*15); 
+         BCL_VLD(VB0, B+k*ldb+VLEN*0); 
+         BCL_VLD(VB1, B+k*ldb+VLEN*1); 
+         BCL_VLD(VB2, B+k*ldb+VLEN*2); 
+         BCL_VLD(VB3, B+k*ldb+VLEN*3); 
+         BCL_VLD(VB4, B+k*ldb+VLEN*4); 
+         BCL_VLD(VB5, B+k*ldb+VLEN*5); 
+         BCL_VLD(VB6, B+k*ldb+VLEN*6); 
+         BCL_VLD(VB7, B+k*ldb+VLEN*7); 
+         BCL_VLD(VB8, B+k*ldb+VLEN*8); 
+         BCL_VLD(VB9, B+k*ldb+VLEN*9); 
+         BCL_VLD(VB10, B+k*ldb+VLEN*10); 
+         BCL_VLD(VB11, B+k*ldb+VLEN*11); 
+         BCL_VLD(VB12, B+k*ldb+VLEN*12); 
+         BCL_VLD(VB13, B+k*ldb+VLEN*13); 
+         BCL_VLD(VB14, B+k*ldb+VLEN*14); 
+         BCL_VLD(VB15, B+k*ldb+VLEN*15); 
 
       for (INDEXTYPE i=ja0; i < ja1; i++)
       {
@@ -402,22 +412,22 @@ void dcscmm_KIJ_D128_a1b1
          
          BCL_vset1(VA0, a0);
          
-         BCL_vld(VC0, C+ia0*ldc+VLEN*0); 
-         BCL_vld(VC1, C+ia0*ldc+VLEN*1); 
-         BCL_vld(VC2, C+ia0*ldc+VLEN*2); 
-         BCL_vld(VC3, C+ia0*ldc+VLEN*3); 
-         BCL_vld(VC4, C+ia0*ldc+VLEN*4); 
-         BCL_vld(VC5, C+ia0*ldc+VLEN*5); 
-         BCL_vld(VC6, C+ia0*ldc+VLEN*6); 
-         BCL_vld(VC7, C+ia0*ldc+VLEN*7); 
-         BCL_vld(VC8, C+ia0*ldc+VLEN*8); 
-         BCL_vld(VC9, C+ia0*ldc+VLEN*9); 
-         BCL_vld(VC10, C+ia0*ldc+VLEN*10); 
-         BCL_vld(VC11, C+ia0*ldc+VLEN*11); 
-         BCL_vld(VC12, C+ia0*ldc+VLEN*12); 
-         BCL_vld(VC13, C+ia0*ldc+VLEN*13); 
-         BCL_vld(VC14, C+ia0*ldc+VLEN*14); 
-         BCL_vld(VC15, C+ia0*ldc+VLEN*15); 
+         BCL_VLD(VC0, C+ia0*ldc+VLEN*0); 
+         BCL_VLD(VC1, C+ia0*ldc+VLEN*1); 
+         BCL_VLD(VC2, C+ia0*ldc+VLEN*2); 
+         BCL_VLD(VC3, C+ia0*ldc+VLEN*3); 
+         BCL_VLD(VC4, C+ia0*ldc+VLEN*4); 
+         BCL_VLD(VC5, C+ia0*ldc+VLEN*5); 
+         BCL_VLD(VC6, C+ia0*ldc+VLEN*6); 
+         BCL_VLD(VC7, C+ia0*ldc+VLEN*7); 
+         BCL_VLD(VC8, C+ia0*ldc+VLEN*8); 
+         BCL_VLD(VC9, C+ia0*ldc+VLEN*9); 
+         BCL_VLD(VC10, C+ia0*ldc+VLEN*10); 
+         BCL_VLD(VC11, C+ia0*ldc+VLEN*11); 
+         BCL_VLD(VC12, C+ia0*ldc+VLEN*12); 
+         BCL_VLD(VC13, C+ia0*ldc+VLEN*13); 
+         BCL_VLD(VC14, C+ia0*ldc+VLEN*14); 
+         BCL_VLD(VC15, C+ia0*ldc+VLEN*15); 
          
          BCL_vmac(VC0, VA0, VB0); 
          BCL_vmac(VC1, VA0, VB1); 
@@ -436,22 +446,22 @@ void dcscmm_KIJ_D128_a1b1
          BCL_vmac(VC14, VA0, VB14);
          BCL_vmac(VC15, VA0, VB15); 
       
-         BCL_vst(C+ia0*ldc+VLEN*0, VC0); 
-         BCL_vst(C+ia0*ldc+VLEN*1, VC1); 
-         BCL_vst(C+ia0*ldc+VLEN*2, VC2); 
-         BCL_vst(C+ia0*ldc+VLEN*3, VC3); 
-         BCL_vst(C+ia0*ldc+VLEN*4, VC4); 
-         BCL_vst(C+ia0*ldc+VLEN*5, VC5); 
-         BCL_vst(C+ia0*ldc+VLEN*6, VC6); 
-         BCL_vst(C+ia0*ldc+VLEN*7, VC7); 
-         BCL_vst(C+ia0*ldc+VLEN*8, VC8); 
-         BCL_vst(C+ia0*ldc+VLEN*9, VC9); 
-         BCL_vst(C+ia0*ldc+VLEN*10, VC10); 
-         BCL_vst(C+ia0*ldc+VLEN*11, VC11); 
-         BCL_vst(C+ia0*ldc+VLEN*12, VC12); 
-         BCL_vst(C+ia0*ldc+VLEN*13, VC13); 
-         BCL_vst(C+ia0*ldc+VLEN*14, VC14); 
-         BCL_vst(C+ia0*ldc+VLEN*15, VC15); 
+         BCL_VST(C+ia0*ldc+VLEN*0, VC0); 
+         BCL_VST(C+ia0*ldc+VLEN*1, VC1); 
+         BCL_VST(C+ia0*ldc+VLEN*2, VC2); 
+         BCL_VST(C+ia0*ldc+VLEN*3, VC3); 
+         BCL_VST(C+ia0*ldc+VLEN*4, VC4); 
+         BCL_VST(C+ia0*ldc+VLEN*5, VC5); 
+         BCL_VST(C+ia0*ldc+VLEN*6, VC6); 
+         BCL_VST(C+ia0*ldc+VLEN*7, VC7); 
+         BCL_VST(C+ia0*ldc+VLEN*8, VC8); 
+         BCL_VST(C+ia0*ldc+VLEN*9, VC9); 
+         BCL_VST(C+ia0*ldc+VLEN*10, VC10); 
+         BCL_VST(C+ia0*ldc+VLEN*11, VC11); 
+         BCL_VST(C+ia0*ldc+VLEN*12, VC12); 
+         BCL_VST(C+ia0*ldc+VLEN*13, VC13); 
+         BCL_VST(C+ia0*ldc+VLEN*14, VC14); 
+         BCL_VST(C+ia0*ldc+VLEN*15, VC15); 
       }
    }
 }

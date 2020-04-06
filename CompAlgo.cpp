@@ -9,15 +9,14 @@
 
 #define INDEXTYPE int
 //#define INDEXTYPE long long
-
 #define VALUETYPE double 
 #define DREAL 1 
-
 /*
  * NOTE: must defined type (e.g., DREAL) before including kernels.h 
  */
 #include "kernels.h" 
 
+#if 0
 enum sdmm_name
 {
    MKL, CSR_IKJ, CSC_KIJ, CSR_IKJ_D128, CSC_KIJ_D128
@@ -26,6 +25,7 @@ char *str_sdmm[] =
 {
    "MKL", "CSR_IKJ", "CSC_KIJ", "CSR_IKJ_D128", "CSC_KIJ_D128"
 };
+#endif
 
 /*==============================================================================*
  *                   API FOR ALL CSR & CSC BASED KERNELS
@@ -210,11 +210,6 @@ void MKL_csr_mm
    MKL_INT *rowptr;
    MKL_INT *col_indx;
    VALUETYPE *values; 
-
-#if 1
-   fprintf(stdout, "rows=%ld, cols=%d, nnz=%ld\nm=%ld, n=%d, k=%ld\n",
-           rows, cols, nnz, m, n, k);
-#endif
 
    // want to keep only one array for rowptr 
    //rowptr = (MKL_INT*) malloc((rows+1)*sizeof(MKL_INT));
@@ -548,7 +543,7 @@ int doTesting_Acsr(CSR<INDEXTYPE, VALUETYPE> &A, INDEXTYPE M, INDEXTYPE N,
 /*
  * NOTE: we are considering only row major B and C storage now
  */
-   ldb = ldc = N; // both row major 
+   ldb = ldc = N; // both row major, N=D=128 multiple of VLEN 
 
    szB = ((K*ldb+VLEN-1)/VLEN)*VLEN;  // szB in element
    
@@ -593,7 +588,13 @@ int doTesting_Acsr(CSR<INDEXTYPE, VALUETYPE> &A, INDEXTYPE M, INDEXTYPE N,
    assert(values);
    for (i=0; i < A.nnz; i++)
       values[i] = distribution(generator);  
-
+#if 0
+   fprintf(stderr, "M=%d, N=%d, K=%d\n", M, N, K);
+   fprintf(stderr, "nnz=%d, rows=%d, cols=%d\n", A.nnz, A.rows, A.cols);
+   fprintf(stderr, "szB=%d, szC=%d\n", szB, szC);
+   fprintf(stderr, "rowptr=%p, rowptr+1=%p, colid=%p\n", 
+           A.rowptr, (A.rowptr)+1, A.colids);
+#endif
    
    fprintf(stderr, "Applying trusted kernel\n");
    trusted('N', M, N, K, alpha, "GXXC", A.nnz, A.rows, A.cols, values, 
@@ -953,8 +954,6 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
 
    N = A_csc.cols; 
    
-   if (!M || M > N)
-      M = N;
    
    // genetare CSR version of A  
    A_csr0.make_empty(); 
@@ -963,6 +962,9 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
    
    // copy constructor
    A_csr1 = A_csr0;
+   
+   if (!M)
+      M = A_csr0.rows;
    
 /*
  * test the result if mandated 
@@ -973,6 +975,20 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
  *       this one 
  */
    assert(N && M && D);
+/*
+ * printing info 
+ */
+#if 0
+   fprintf(stderr, "*** A_csr0: \n");
+   fprintf(stderr, "       rows = %ld, cols = %ld, nnz = %ld\n", 
+           A_csr0.rows, A_csr0.cols, A_csr0.nnz);
+   fprintf(stderr, "       rowptr = %p, colids = %p, values = %p\n",
+           A_csr0.rowptr, A_csr0.colids, A_csr0.values);
+   if (A_csr0.zerobased)
+      fprintf(stderr, "       zerobased\n");
+
+#endif
+
 /*
  * assign alpha beta 
  */
