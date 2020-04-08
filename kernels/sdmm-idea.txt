@@ -1,0 +1,58 @@
+
+SDMM ideas to time: 
+
+1. CSR IJK loop: 
+   Access: 
+      IA = 2M 
+      JA = N*NNZ 
+       A = N*NNZ 
+       B = N*NNZ, indirect 
+       C = M*N read and write 
+
+2. CSR IKJ loop:
+   Access: 
+      IA = 2M 
+      JA = NNZ
+       A = NNZ
+       B = N*NNZ, cont in row 
+       C = N*NNZ, read and write  
+
+3. BCSR:
+
+
+
+
+MKL's prototype: 
+
+/*
+ *    Note: based on NIST Sparse CSR formt:
+ *       Instead of one rowptr, it has two arrays: 
+ *          pointerB : staring val/col index of a row, 
+ *          pointerE : ending val/col index of a row
+ *             Example: 
+                  pointerB[i] = rowptr[i]
+                  pointerB[i] = rowptr[i+1]
+     *** Defining submatrix is easier in this method, though uses extra storage
+ */
+void mkl_dcsrmm 
+(
+   const char *transa ,    // 'N', 'T' , 'C' 
+   const MKL_INT *m ,      // number of rows of A 
+   const MKL_INT *n ,      // number of cols of C
+   const MKL_INT *k ,      // number of cols of A
+   const double *alpha ,   // double scalar ?? why ptr 
+   const char *matdescra , // 6 characr array descriptor for A:
+                                 // [G/S/H/T/A/D],[L/U],[N/U],[F/C] -> [G,X,X,C] 
+   const double *val ,     // NNZ value  
+   const MKL_INT *indx ,   // colids -> column indices 
+   const MKL_INT *pntrb ,  // starting index for rowptr
+   const MKL_INT *pntre ,  // ending index for rowptr
+   const double *b ,       // Dense B matrix
+   const MKL_INT *ldb ,    // 2nd dimension of b for zero-based indexing, rowsz  
+   const double *beta ,    // double scalar beta[0] 
+   double *c ,             // Dense matrix c
+   const MKL_INT *ldc      // 2nd dimension of b 
+);
+
+
+

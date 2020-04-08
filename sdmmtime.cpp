@@ -316,8 +316,9 @@ void Usage()
 
 void GetFlags(int narg, char **argv, string &inputfile, int &option, 
       INDEXTYPE &D, INDEXTYPE &M, int &csKB, int &nrep, int &isTest, int &skHd,
-      int &ialpha, int &ibeta)
+      VALUETYPE &alpha, VALUETYPE &beta)
 {
+   int ialpha, ibeta; 
 /*
  * default values 
  */
@@ -384,6 +385,25 @@ void GetFlags(int narg, char **argv, string &inputfile, int &option,
    if (inputfile == "")
    {
       cout << "Need input file ??? " << endl;
+      exit(1);
+   }
+/*
+ * set alpha beta
+ */
+   if (ialpha == 1 && ibeta == 1)
+   {
+      alpha = 1.0; 
+      beta = 1.0;
+   }
+   else if (ialpha == 2 && ibeta == 2 )
+   {
+      alpha = 2.0; 
+      beta = 2.0;
+   }
+   else
+   {
+      cout << "ialpha =  " << ialpha << " ibeta = " << ibeta << " not supported"
+         << endl;
       exit(1);
    }
 }
@@ -871,13 +891,13 @@ vector<double> doTimingMKL_Acsr
 }
 
 void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M, 
-      int csKB, int nrep, int isTest, int skipHeader, int ialpha, int ibeta)
+      int csKB, int nrep, int isTest, int skipHeader, VALUETYPE alpha, 
+      VALUETYPE beta)
 {
    int nerr;
    vector<double> res0, res1; 
    double t0, t1, t2; 
    INDEXTYPE N; /* A->MxN, B-> NxD, C-> MxD */
-   VALUETYPE alpha, beta;
    CSR<INDEXTYPE, VALUETYPE> A_csr0; 
    CSR<INDEXTYPE, VALUETYPE> A_csr1; 
    CSC<INDEXTYPE, VALUETYPE> A_csc;
@@ -927,21 +947,6 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
       fprintf(stderr, "       zerobased\n");
 
 #endif
-
-/*
- * assign alpha beta 
- */
-   if (ialpha == 0)
-      alpha = 0.0;
-   else if (ialpha == 1)
-      alpha = 1.0;
-   else alpha = 0.3;  // any value, doesn't matter  
-   
-   if (ibeta == 0)
-      beta = 0.0;
-   else if (ibeta == 1)
-      beta = 1.0;
-   else beta = 0.3;  // any value, doesn't matter  
 /*
  * Test for correctness when asked 
  */
@@ -1029,12 +1034,12 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
 int main(int narg, char **argv)
 {
    INDEXTYPE D, M;
-   int ialpha, ibeta;
+   VALUETYPE alpha, beta;
    int option, csKB, nrep, isTest, skHd;
    string inputfile; 
    GetFlags(narg, argv, inputfile, option, D, M, csKB, nrep, isTest, skHd, 
-            ialpha, ibeta);
-   GetSpeedup(inputfile, option, D, M, csKB, nrep, isTest, skHd, ialpha, ibeta);
+            alpha, beta);
+   GetSpeedup(inputfile, option, D, M, csKB, nrep, isTest, skHd, alpha, beta);
    return 0;
 }
 
