@@ -367,17 +367,19 @@
    #define VLENb 16
    #if defined(DREAL)
       #define VLEN 2
-      #define VTYPE vector double  
+      #define VTYPE vector double 
+      #define TYPE double
    #else /* single precision float */
       #define VLEN 4
       #define VTYPE vector float 
+      #define TYPE float
    #endif
    #define BLC_vldu(v_, p_) v_ = vec_vsx_ld(0, (VTYPE*)(p_)) 
    #define BLC_vld(v_, p_) v_ = vec_ld(0, (VTYPE*)(p_))  
-   #define BLC_vzero(v_) v_ = vec_splats((VALUETYPE)0.0)
+   #define BLC_vzero(v_) v_ = vec_splats((TYPE)0.0)
    #define BLC_vstu(p_, v_) vec_vsx_st(v_, 0, (VTYPE*)(p_))
    #define BLC_vst(p_, v_)  vec_st(v_, 0, (VTYPE*)(p_))
-   #define BLC_vbcast(v_, p_) v_ =  vec_splats(*((VALUETYPE*)(p_)))
+   #define BLC_vbcast(v_, p_) v_ =  vec_splats(*((TYPE*)(p_)))
    #define BLC_vadd(d_, s1_, s2_) d_ =  vec_add(s1_, s2_) 
    #define BLC_vsub(d_, s1_, s2_) d_ =  vec_sub(s1_, s2_) 
    #define BLC_vmul(d_, s1_, s2_) d_ =  vec_mul(s1_, s2_) 

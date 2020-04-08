@@ -1,91 +1,15 @@
 #!/bin/bash
 
-rdir=/home/msujon/git/IU/msujon/SDMM
-mdir=datasets/SuiteSparse
-dset=N50k-100k 
+nrep=5
 
-dsets="N25k-N50k N50k-100k N100k-N200k"
+# alpha=1.0 beta=1.0
+./runtime.sh -r $nrep -p 0 -M 256 -a 1 -b 1  
+./runtime.sh -r $nrep 0 -m 1 -a 1 -b 1
+./runtime.sh -r $nrep -p 1 -M 256 -a 1 -b 1  
+./runtime.sh -r $nrep -p 1 -m 1 -a 1 -b 1
 
-resdir=results
-
-#defualt values 
-isMAll=0
-m=256
-d=128 
-isPTtime=1
-nrep=10
-
-#commandline argument 
-
-usage="Usage: $0 [OPTION] ...
-Options: 
--d [val]    value of D (default 128)
--m [1/0]    is value of M all rows of A ? (default 0) 
--M [val]    value of M (default 256)
--p [1/0]    time parallel version (default parallel varsion)
--r [val]    number of repeatation (default 10) 
---help      display help and exit
-"
-
-
-while getopts "d:m:M:p:r:" opt
-do
-   case $opt in 
-      d) 
-         d=$OPTARG
-         ;;
-      m)
-         isMAll=$OPTARG
-         ;;
-      M)
-         m=$OPTARG
-         ;;
-      p)
-         isPTtime=$OPTARG
-         ;;
-      \?)
-         echo "$usage"
-         exit 1
-         ;;
-   esac
-done
-
-
-mkdir -p $resdir
-
-#
-#  enable parallel time, set pttime=0 if want to run sequential 
-#
-if [ $isPTtime -eq 1 ]
-then
-   par="_pt"
-else
-   par=""
-fi
-#
-# select M
-#
-if [ $isMAll -eq 1 ]
-then
-   Mval=""  #by default all 
-   Mstr="_allM"
-else
-   Mval="-M $m"  #by default all 
-   Mstr="_${M}"
-fi
-
-for dset in $dsets
-do
-   FILES=${mdir}/${dset}/*.mtx 
-   res=${resdir}/${dset}${Mstr}${par}.csv
-   
-   echo "FILENAME,NNZ,M,N,D,Trusted_inspect_time,trusted_exe_time,Test_inspect_time,Test_exe_time,Speedup_exe_time,Speedup_total_time,Critical_point" > $res
-   
-   for file in $FILES 
-   do 
-      #echo "$file"
-      ./bin/CompAlgo${par} -input $file $Mval -D $d -nrep $nrep -skHd 1 \
-         | tee -a $res 
-   done
-done
-
+#alpha=X beta=X
+./runtime.sh -r $nrep -p 0 -M 256 -a 2 -b 2  
+./runtime.sh -r $nrep -p 0 -m 1 -a 2 -b 2
+./runtime.sh -r $nrep -p 1 -M 256 -a 2 -b 2  
+./runtime.sh -r $nrep -p 1 -m 1 -a 2 -b 2
