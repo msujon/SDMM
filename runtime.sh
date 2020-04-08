@@ -101,7 +101,7 @@ do
    for file in $FILES 
    do 
       #echo "$file"
-      ./bin/CompAlgo${par} -input $file $Mval -D $d -nrep $nrep -skHd 1 \
+      ./bin/xsdmmtime${par} -input $file $Mval -D $d -nrep $nrep -skHd 1 \
          -ialpha $ialpha -ibeta $ibeta | tee -a $res 
    done
 done
