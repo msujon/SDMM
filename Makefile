@@ -78,11 +78,11 @@ $(BIN)/dkernel_pt.o: $(KERNEL)/dkernels.c $(KERNEL)/kernels.h $(KERNEL)/dkernels
 
 $(BIN)/sdmmtime_pt.o: sdmmtime.cpp $(KERNEL)/kernels.h  
 	mkdir -p $(BIN)
-	$(CC) $(FLAGS) -I$(INCLUDE) $(CC_MKL_FLAG) -DCPP -c sdmmtime.cpp -o $@   
+	$(CC) $(FLAGS) -I$(INCLUDE) $(PT_CC_MKL_FLAG) -DCPP -c sdmmtime.cpp -o $@   
 
 $(BIN)/xsdmmtime_pt: $(BIN)/sdmmtime_pt.o $(BIN)/dkernel_pt.o  
 	mkdir -p $(BIN)
-	$(CC) $(FLAGS) -o $@ $^ $(LIBS) $(LD_MKL_FLAG)
+	$(CC) $(FLAGS) -o $@ $^ $(LIBS) $(PT_LD_MKL_FLAG)
 
 clean:
 	rm -rf ./bin/*

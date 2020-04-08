@@ -7,8 +7,8 @@ mdir=datasets/SuiteSparse
 #dsets="N1500k-2M"
 #dsets="N1M-1500k"
 #dsets="N200k-500k"
-#dsets="N100k-N200k"
-dsets="N25k-N50k N50k-100k N100k-N200k N200k-500k N500k-1M N1M-1500k"
+dsets="N100k-N200k"
+#dsets="N25k-N50k N50k-100k N100k-N200k N200k-500k N500k-1M N1M-1500k"
 
 resdir=results
 

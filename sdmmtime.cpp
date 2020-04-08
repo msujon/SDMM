@@ -984,10 +984,10 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
    res0 = doTimingMKL_Acsr(A_csr0, M, D, N, alpha, beta, csKB, nrep);
  
    // optimized kernel 
-   //res1 = doTiming_Acsr<dcsrmm_IKJ_D128>(A_csr1, M, D, N, alpha, beta, 
-   //         csKB, nrep);
-   res1 = doTiming_Acsr<dcsrmm_IKJ>(A_csr1, M, D, N, alpha, beta, 
+   res1 = doTiming_Acsr<dcsrmm_IKJ_D128>(A_csr1, M, D, N, alpha, beta, 
             csKB, nrep);
+   //res1 = doTiming_Acsr<dcsrmm_IKJ>(A_csr1, M, D, N, alpha, beta, 
+   //         csKB, nrep);
 #endif
    
    //cout << "skipHeader: " << skipHeader << endl;
