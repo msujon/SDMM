@@ -1,12 +1,27 @@
 SAMPLE = ./sample
 BIN = ./bin
+KERNEL = ./kernels
+
+#
+#  to compiler C kernels 
+#
+KCC = gcc 
+KCCFLAGS = -fopenmp -O3 -march=native 
+
+#
+# Application compiler 
+#
 
 CC = g++
+#FLAGS = -g -fopenmp -O3 -mavx -std=c++11 
+#FLAGS = -g -fopenmp -O3 -march=native -std=c++11
+FLAGS = -fopenmp -O3 -march=native -std=c++11
 
 #
 # flags needed to run mkl
 #
 MKLROOT = /opt/intel/mkl
+
 #
 #parallel version of MKL 
 #
@@ -25,41 +40,50 @@ LD_MKL_FLAG =  -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_ilp64.a \
 	       ${MKLROOT}/lib/intel64/libmkl_core.a -Wl,--end-group -lpthread \
 	       -lm -ldl 
 
-# valgrind doesn't support avx512, to check memory error call with avx 
-#FLAGS = -g -fopenmp -O3 -mavx -std=c++11 
 
-#FLAGS = -g -fopenmp -O3 -march=native -std=c++11
-FLAGS = -fopenmp -O3 -march=native -std=c++11
-
-TOCOMPILE=
+TOCOMPILE= 
 LIBS=
 
 #INCLUDE = simd.h kernels.h dkernels_avxz.h 
-INCLUDE =  
 
-#
-##
-#
-all: $(BIN)/CompAlgo $(BIN)/CompAlgo_pt 
+INCLUDE = $(KERNEL)/ 
 
-$(BIN)/%: $(SAMPLE)/%.cpp
+all: $(BIN)/xsdmmtime $(BIN)/xsdmmtime_pt 
+
+#$(BIN)/%: $(SAMPLE)/%.cpp
+#	mkdir -p $(BIN)
+#	$(CC) $(FLAGS) $(INCLUDE) $(CC_MKL_FLAG) -o $@ $^ -DCPP \
+#	   -DHW_EXE $(TOCOMPILE) $(LIBS) $(LD_MKL_FLAG)
+
+$(BIN)/dkernel.o: $(KERNEL)/dkernels.c $(KERNEL)/kernels.h \
+   $(KERNEL)/dkernels_D128.h 
+	$(KCC) $(KCCFLAGS) -o $@ -c $(KERNEL)/dkernels.c  
+
+
+$(BIN)/sdmmtime.o: sdmmtime.cpp $(KERNEL)/kernels.h  
 	mkdir -p $(BIN)
-	$(CC) $(FLAGS) $(INCLUDE) $(CC_MKL_FLAG) -o $@ $^ -DCPP \
-	   -DHW_EXE $(TOCOMPILE) $(LIBS) $(LD_MKL_FLAG)
+	$(CC) $(FLAGS) -I$(INCLUDE) $(CC_MKL_FLAG) -DCPP -c sdmmtime.cpp -o $@   
 
-$(BIN)/CompAlgo: CompAlgo.cpp $(INCLUDE) 
+$(BIN)/xsdmmtime: $(BIN)/sdmmtime.o $(BIN)/dkernel.o  
 	mkdir -p $(BIN)
-	$(CC) $(FLAGS) $(INCLUDE) $(CC_MKL_FLAG) -o $@ $^ -DCPP \
-	   $(TOCOMPILE) $(LIBS) $(LD_MKL_FLAG)
+	$(CC) $(FLAGS) -o $@ $^ $(LIBS) $(LD_MKL_FLAG)
+
 
 #
 ## parallel version 
 #
 
-$(BIN)/CompAlgo_pt: CompAlgo.cpp $(INCLUDE)
+$(BIN)/dkernel_pt.o: $(KERNEL)/dkernels.c $(KERNEL)/kernels.h $(KERNEL)/dkernels_D128.h 
+	$(KCC) $(KCCFLAGS) $(MYPT_FLAG) -o $@ -c $(KERNEL)/dkernels.c  
+
+$(BIN)/sdmmtime_pt.o: sdmmtime.cpp $(KERNEL)/kernels.h  
 	mkdir -p $(BIN)
-	$(CC) $(FLAGS) $(INCLUDE) $(MYPT_FLAG) $(PT_CC_MKL_FLAG) -o $@ $^ -DCPP \
-	   $(TOCOMPILE) $(LIBS) $(PT_LD_MKL_FLAG)
+	$(CC) $(FLAGS) -I$(INCLUDE) $(CC_MKL_FLAG) -DCPP -c sdmmtime.cpp -o $@   
+
+$(BIN)/xsdmmtime_pt: $(BIN)/sdmmtime_pt.o $(BIN)/dkernel_pt.o  
+	mkdir -p $(BIN)
+	$(CC) $(FLAGS) -o $@ $^ $(LIBS) $(LD_MKL_FLAG)
+
 clean:
 	rm -rf ./bin/*
 
