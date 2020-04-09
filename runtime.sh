@@ -94,7 +94,7 @@ fi
 for dset in $dsets
 do
    FILES=${mdir}/${dset}/*.mtx 
-   res=${resdir}/${dset}${Mstr}_a${ialpha}b${ibeta}${par}.csv
+   res=${resdir}/${dset}${Mstr}_a${ialpha}b${ibeta}_nrep${nrep}${par}.csv
    
    echo "FILENAME,NNZ,M,N,D,Trusted_inspect_time,trusted_exe_time,Test_inspect_time,Test_exe_time,Speedup_exe_time,Speedup_total_time,Critical_point" > $res
    
