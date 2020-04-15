@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <random>
 #include <cassert>
+#include <time.h>
 
 // rename them as cpp or hpp and add in Makefile
 #include "CSC.h"
@@ -44,7 +45,7 @@ typedef void (*csr_mm_t)
    const char *matdescra,  // 6 characr array descriptor for A:
                            // [G/S/H/T/A/D],[L/U],[N/U],[F/C] -> [G,X,X,C] 
    const INDEXTYPE nnz,   // nonzeros: need to recreate csr with mkl 
-   const INDEXTYPE rows,  // number of rows
+   const INDEXTYPE rows,  // number of rows... not needed 
    const INDEXTYPE cols,  // number of columns 
    const VALUETYPE *val,   // NNZ value  
    const INDEXTYPE *indx,  // colids -> column indices 
@@ -211,8 +212,10 @@ void MKL_csr_mm
 
    // want to keep only one array for rowptr 
    //rowptr = (MKL_INT*) malloc((rows+1)*sizeof(MKL_INT));
-   
-   //M = rows; 
+/*
+ * NOTE: we are allocating memory for full size. However, we can call the 
+ * inspector and executor with partial/blocked 
+ */
    M = m; 
    
    rowptr = (MKL_INT*) malloc((M+1)*sizeof(MKL_INT)); // just allocate upto M
@@ -409,7 +412,7 @@ void GetFlags(int narg, char **argv, string &inputfile, int &option,
 }
 
 
-// from ATLAS;s ATL_epsilon.c 
+// from ATLAS; ATL_epsilon.c 
 template <typename NT> 
 NT Epsilon(void)
 {
@@ -484,10 +487,11 @@ int doTesting_Acsr(CSR<INDEXTYPE, VALUETYPE> &A, INDEXTYPE M, INDEXTYPE N,
       INDEXTYPE K, VALUETYPE alpha, VALUETYPE beta)
 {
    int nerr; 
-   size_t i, szB, szC, ldc, ldb; 
+   size_t i, j, szB, szC, ldc, ldb; 
    VALUETYPE *pb, *b, *pc0, *c0, *pc, *c;
-   INDEXTYPE nnz=A.nnz;
-   VALUETYPE *values;  // want to generate random value  
+   INDEXTYPE nnz, rows;
+   VALUETYPE *values;  // want to generate random value 
+   INDEXTYPE *rowptr, *colids;
 
    std::default_random_engine generator;
    std::uniform_real_distribution<double> distribution(0.0,1.0);
@@ -499,9 +503,10 @@ int doTesting_Acsr(CSR<INDEXTYPE, VALUETYPE> &A, INDEXTYPE M, INDEXTYPE N,
 
    szB = ((K*ldb+BCL_VLEN-1)/BCL_VLEN)*BCL_VLEN;  // szB in element
    
-   //szC = ((M*ldc+VLEN-1)/VLEN)*VLEN;  // szC in element 
+   szC = ((M*ldc+BCL_VLEN-1)/BCL_VLEN)*BCL_VLEN;  // szC in element 
+   
    // changes to test mkl 
-   szC = ((A.rows*ldc+BCL_VLEN-1)/BCL_VLEN)*BCL_VLEN;  // szC in element 
+   //szC = ((A.rows*ldc+BCL_VLEN-1)/BCL_VLEN)*BCL_VLEN;  // szC in element 
       
    pb = (VALUETYPE*)malloc(szB*sizeof(VALUETYPE)+2*ATL_Cachelen);
    assert(pb);
@@ -533,29 +538,89 @@ int doTesting_Acsr(CSR<INDEXTYPE, VALUETYPE> &A, INDEXTYPE M, INDEXTYPE N,
       c[i] = 0.0; c0[i] = 0.0;
    #endif
    }
-/*
- * csr may consists all 1 as values... init with random values
- */
-   values = (VALUETYPE*)malloc(A.nnz*sizeof(VALUETYPE));
-   assert(values);
-   for (i=0; i < A.nnz; i++)
-      values[i] = distribution(generator);  
-#if 0
-   fprintf(stderr, "M=%d, N=%d, K=%d\n", M, N, K);
-   fprintf(stderr, "nnz=%d, rows=%d, cols=%d\n", A.nnz, A.rows, A.cols);
-   fprintf(stderr, "szB=%d, szC=%d\n", szB, szC);
-   fprintf(stderr, "rowptr=%p, rowptr+1=%p, colid=%p\n", 
-           A.rowptr, (A.rowptr)+1, A.colids);
-#endif
-   
-   fprintf(stderr, "Applying trusted kernel\n");
-   trusted('N', M, N, K, alpha, "GXXC", A.nnz, A.rows, A.cols, values, 
-           A.colids, A.rowptr, (A.rowptr)+1, b, ldb, beta, c0, ldc);   
-   
-   fprintf(stderr, "Applying test kernel\n");
-   test('N', M, N, K, alpha, "GXXC", A.nnz, A.rows, A.cols, values, A.colids, 
-            A.rowptr, (A.rowptr)+1, b, ldb, beta, c, ldc);  
 
+   if (M == A.rows) // test on all rows 
+   {
+      nnz = A.nnz; 
+      rows = A.rows;
+      rowptr = A.rowptr;
+      colids = A.colids; 
+#if 0
+      fprintf(stderr, "M=%d, N=%d, K=%d\n", M, N, K);
+      fprintf(stderr, "nnz=%d, rows=%d, cols=%d\n", A.nnz, A.rows, A.cols);
+      fprintf(stderr, "szB=%d, szC=%d\n", szB, szC);
+      fprintf(stderr, "rowptr=%p, rowptr+1=%p, colid=%p\n", 
+              A.rowptr, (A.rowptr)+1, A.colids);
+#endif
+   }
+   else // test randow M rows 
+   {
+/*
+ *    We have to effectively recompute CSR for just that specific M block:
+ *       copy only the block colids & vals and rowptr but change the value of 
+ *       rowptr to point based on new indices 
+ */
+      INDEXTYPE indb, inde, rblkid, stM;
+      INDEXTYPE MM = A.rows / M;  // muliple of M 
+      
+      srand(time(NULL)); 
+      if (MM)
+      {
+         rblkid = (rand() % MM) + 0 ; // 0 to MM-1 
+      }
+      else
+      {
+         rblkid = 0; 
+         M = A.rows; // M < A.rows???  
+      }
+      stM = rblkid*M;  // starting row number  
+      
+      fprintf(stdout, "Randomly selecting blk (size=%d): blkid=%d, Mstart=%d\n",
+             M, rblkid, stM);
+/*
+ *    Starting index of the block
+ */
+      indb = A.rowptr[stM]; // staring row id val 
+      inde = A.rowptr[stM + M]; // ending row id val  
+      nnz = inde - indb + 1; // number of vals
+      
+      //fprintf(stderr, "indb = %d, inde = %d, nind = %d\n", indb, inde, nnz);
+/*
+ *    copy colids from this block 
+ */   
+      colids = (INDEXTYPE*)malloc(nnz*sizeof(INDEXTYPE));
+      assert(colids);
+      for (i=indb, j=0; i < inde+1; i++,j++)
+         colids[j] = A.colids[i]; 
+/*
+ *    copy rowptr and change it with new indices for this block  
+ */
+      rowptr = (INDEXTYPE*)malloc((M+1)*sizeof(INDEXTYPE));
+      assert(rowptr);
+      for (i=0; i < M+1; i++)
+         rowptr[i] = A.rowptr[stM+i] - indb; // new index  
+   }
+   
+/*
+ *    csr may consists all 1 as values... init with random values
+ */
+   values = (VALUETYPE*)malloc(nnz*sizeof(VALUETYPE));
+   assert(values);
+   for (i=0; i < nnz; i++)
+      values[i] = distribution(generator);  
+/*
+ * Let's apply trusted and test kernels 
+ */
+   fprintf(stdout, "Applying trusted kernel\n");
+   trusted('N', M, N, K, alpha, "GXXC", nnz, rows, A.cols, values,
+           colids, rowptr, rowptr+1, b, ldb, beta, c0, ldc);   
+   
+   fprintf(stdout, "Applying test kernel\n");
+   test('N', M, N, K, alpha, "GXXC", nnz, rows, A.cols, values,
+         colids, rowptr, rowptr+1, b, ldb, beta, c, ldc);   
+/*
+ * check for errors 
+ */
    nerr = doChecking<INDEXTYPE, VALUETYPE>(nnz, M, N, c0, c, ldc);
 
    free(pc0);
@@ -694,33 +759,36 @@ vector <double> doTiming_Acsr
    for (i=0; i < szC; i++)
       c[i] = distribution(generator);  
 
-/*
- * Copying the data to make it same as MKL timer... 
- * We may use it later if we introduce an inspector phase 
- */
-   rowptr = (INDEXTYPE*) malloc((M+1)*sizeof(INDEXTYPE));
-   assert(rowptr);
-   for (i=0; i < M+1; i++)
-      rowptr[i] = A.rowptr[i];
-   
-   col_indx = (INDEXTYPE*) malloc(A.nnz*sizeof(INDEXTYPE));
-   assert(col_indx);
-   for (i=0; i < A.nnz; i++)
-      col_indx[i] = A.colids[i]; 
-   
-   values = (VALUETYPE*) malloc(A.nnz*sizeof(VALUETYPE));
-   assert(col_indx);
-   for (i=0; i < A.nnz; i++)
+   //if (M == A.rows) // time on all rows 
    {
-      //values[i] = A.values[i]; 
-      values[i] = distribution(generator); // avoid all 1.0 values in timing  
-   }
 /*
- * NOTE: with small working set, we should not skip the first iteration 
- * (warm cache), because we want to time out of cache... 
- * We run this timer either for in-cache data or large working set
- * So we can safely skip 1st iteration... C will be in cache then
+ *    Copying the data to make it same as MKL timer... 
+ *    We may use it later if we introduce an inspector phase 
  */
+      rowptr = (INDEXTYPE*) malloc((M+1)*sizeof(INDEXTYPE));
+      assert(rowptr);
+      for (i=0; i < M+1; i++)
+         rowptr[i] = A.rowptr[i];
+   
+      col_indx = (INDEXTYPE*) malloc(A.nnz*sizeof(INDEXTYPE));
+      assert(col_indx);
+      for (i=0; i < A.nnz; i++)
+         col_indx[i] = A.colids[i]; 
+   
+      values = (VALUETYPE*) malloc(A.nnz*sizeof(VALUETYPE));
+      assert(col_indx);
+      for (i=0; i < A.nnz; i++)
+      {
+         //values[i] = A.values[i]; 
+         values[i] = distribution(generator); // avoid all 1.0 values in timing  
+      }
+/*
+ *    NOTE: with small working set, we should not skip the first iteration 
+ *    (warm cache), because we want to time out of cache... 
+ *    We run this timer either for in-cache data or large working set
+ *    So we can safely skip 1st iteration... C will be in cache then
+ */
+   }
 
    //CSR_KERNEL(M, D, N, A_csr, b, D, c, D);  // skip it's timing  
    // no setup time for our kernel so far
@@ -824,6 +892,11 @@ vector<double> doTimingMKL_Acsr
       //values[i] = A.values[i];
       values[i] = distribution(generator); // avoid all 1.0 values in timing  
    }
+/*
+ * Note: Need to consider two cases:
+ *       1. Call once for all rows
+ *       2. Call M row block at a time, and have multiple calls  
+ */
 
    // timing inspector phase 
    {
@@ -858,10 +931,11 @@ vector<double> doTimingMKL_Acsr
       stat = mkl_sparse_s_mm (SPARSE_OPERATION_NON_TRANSPOSE, alpha, Amkl, Adsc, 
                               SPARSE_LAYOUT_ROW_MAJOR, b, N, ldb, beta, c, ldc); 
    #endif
-#if 0
+#if 1
    if (stat != SPARSE_STATUS_SUCCESS)
    {
-      cout << "creating csr for MKL failed!";
+      cout << "creating csr for MKL failed, stat =!" << SPARSE_STATUS_SUCCESS 
+           << endl;
       exit(1);
    }
 #endif
@@ -954,8 +1028,8 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
    {
       // testing with same kernel to test the tester itself: sanity check  
       
-      //nerr = doTesting_Acsr<dcsrmm_IKJ_a1b1,dcsrmm_IKJ>
-      //                      (A_csr0, M, D, N);
+      //nerr = doTesting_Acsr<dcsrmm_IKJ,dcsrmm_IKJ>
+      //                      (A_csr0, M, D, N, alpha, beta);
       //nerr = doTesting_Acsr<dcsrmm_IKJ, MKL_csr_mm>
       //                         (A_csr0, M, D, N, alpha, beta); 
       nerr = doTesting_Acsr<dcsrmm_IKJ_D128, MKL_csr_mm>

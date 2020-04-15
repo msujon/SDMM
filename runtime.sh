@@ -1,8 +1,7 @@
 #!/bin/bash
 
 rdir=/home/msujon/git/IU/msujon/SDMM
-mdir=datasets/SuiteSparse
-#dset=N50k-100k 
+mdir=/home/msujon/git/IU/msujon/dataset/SuiteSparse/formated
 
 #dsets="N1500k-2M"
 #dsets="N1M-1500k"
@@ -91,6 +90,9 @@ else
    Mstr="_M${m}"
 fi
 
+#
+#  run xsdmmtime for all dataset
+#
 for dset in $dsets
 do
    FILES=${mdir}/${dset}/*.mtx 
