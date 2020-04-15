@@ -1,13 +1,20 @@
 #!/bin/bash
 
+#
+# change the directory address accordingly
+#     rdir = project directory 
+#     mdir = dataset directory 
+#
 rdir=/home/msujon/git/IU/msujon/SDMM
 mdir=/home/msujon/git/IU/msujon/dataset/SuiteSparse/formated
 
 #dsets="N1500k-2M"
 #dsets="N1M-1500k"
 #dsets="N200k-500k"
-dsets="N100k-N200k"
+#dsets="N100k-N200k"
 #dsets="N25k-N50k N50k-100k N100k-N200k N200k-500k N500k-1M N1M-1500k"
+
+dsets="N100k-N200k-FM N200k-500k-FM N500k-1M-FM N1M-1500k-FM N1500k-2M-FM N2M-3M-FM N3M-4M-FM N4M-5M-FM N5M-N6M N7M-10M"
 
 resdir=results
 
@@ -96,7 +103,7 @@ fi
 for dset in $dsets
 do
    FILES=${mdir}/${dset}/*.mtx 
-   res=${resdir}/${dset}${Mstr}_a${ialpha}b${ibeta}_nrep${nrep}${par}.csv
+   res=${resdir}/${dset}${Mstr}_a${ialpha}b${ibeta}_nr${nrep}${par}.csv
    
    echo "FILENAME,NNZ,M,N,D,Trusted_inspect_time,trusted_exe_time,Test_inspect_time,Test_exe_time,Speedup_exe_time,Speedup_total_time,Critical_point" > $res
    
