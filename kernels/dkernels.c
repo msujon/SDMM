@@ -310,8 +310,7 @@ void dcscmm_KIJ_a1b1
 }
 
 #ifdef __cplusplus
-   extern "C"
-   {
+   }
 #endif
 
    
