@@ -579,7 +579,7 @@ int doTesting_Acsr(CSR<INDEXTYPE, VALUETYPE> &A, INDEXTYPE M, INDEXTYPE N,
       INDEXTYPE indb, inde, rblkid, stM;
       INDEXTYPE MM = A.rows / M;  // muliple of M 
       
-      srand(time(NULL)); 
+      srand(time(NULL)); // random block: to match with timer, can use same seed
       rblkid = (rand() % MM) + 0 ; // 0 to MM-1 
       stM = rblkid*M;  // starting row number  
       
@@ -895,8 +895,9 @@ vector <double> doTiming_Acsr
  IT K,
  const VALUETYPE alpha,
  const VALUETYPE beta,
- const int csKB, 
- const int nrep     /* if nrep == 0, nrep = number of wset fit in cache */
+ const int csKB,
+ const int rblkid,   /* if M < A.rows, select a row blk to time */
+ const int nrep     
  )
 {
    IT i, j;
@@ -960,12 +961,8 @@ vector <double> doTiming_Acsr
    }
    else // time random block 
    {
-      IT indb, inde, rblkid, stM;
-      IT MM = A.rows / M;  // muliple of M 
+      IT indb, inde, stM;
       
-      //srand(time(NULL)); 
-      srand(2);  // to make timer repeatable assume fixed seed
-      rblkid = (rand() % MM) + 0 ; // 0 to MM-1 
       stM = rblkid*M;  // starting row number  
       #if 0 
          fprintf(stdout, 
@@ -1020,7 +1017,7 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
    int nerr;
    vector<double> res0, res1; 
    double t0, t1, t2; 
-   INDEXTYPE N; /* A->MxN, B-> NxD, C-> MxD */
+   INDEXTYPE N, rblkid; /* A->MxN, B-> NxD, C-> MxD */
    CSR<INDEXTYPE, VALUETYPE> A_csr0; 
    CSR<INDEXTYPE, VALUETYPE> A_csr1; 
    CSC<INDEXTYPE, VALUETYPE> A_csc;
@@ -1103,10 +1100,20 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
  * NOTE: We are keeping seperate A_csr so that later call doesn't get any 
  * benefit of being already on cache. 
  */
+   if (M != A_csr0.rows)  // select blk id randomly 
+   {
+      INDEXTYPE MM = A_csr0.rows / M;  // muliple of M 
+      //srand(time(NULL)); 
+      srand(2);  // to make timer repeatable use fixed seed
+      rblkid = (rand() % MM) + 0 ; // 0 to MM-1 
+   }
+   else
+      rblkid = 0; // don't care 
+
    res0 = doTiming_Acsr<MKL_INT, callTimerMKL_Acsr>(A_csr0, M, D, N, 
-               alpha, beta, csKB, nrep);
+               alpha, beta, csKB, rblkid, nrep);
    res1 = doTiming_Acsr<INDEXTYPE, callTimer_Acsr>(A_csr0, M, D, N, 
-               alpha, beta, csKB, nrep);
+               alpha, beta, csKB, rblkid, nrep);
    
    if(!skipHeader) 
    {
