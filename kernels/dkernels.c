@@ -5,7 +5,7 @@
 #endif
 
 #include <stdio.h>
-
+#include<omp.h>
 #define DREAL 1          /* needed in simd.h */ 
 #include "simd.h"
 //#include "dkernels.h"
@@ -245,8 +245,19 @@ void dcsrmm_IKJ_D128
    else if (alpha == 1.0)
    {
       if (beta == 1.0)
+#if 0
          dcsrmm_IKJ_D128_a1b1(transa, m, n, k, alpha, matdescra, nnz, rows, 
                cols, val, indx, pntrb, pntre, B, ldb, beta, C, ldc);
+#else
+         #if defined(LOAD_BALANCE) 
+         // new impl testing 
+         dcsrmm_IKJ_D128_LDB_a1b1(transa, m, n, k, alpha, matdescra, nnz, rows, 
+               cols, val, indx, pntrb, pntre, B, ldb, beta, C, ldc);
+         #else
+         dcsrmm_IKJ_D128_a1b1(transa, m, n, k, alpha, matdescra, nnz, rows, 
+               cols, val, indx, pntrb, pntre, B, ldb, beta, C, ldc);
+         #endif
+#endif
       else /*beta==0.0 && beta == X */
       {
          fprintf(stderr, "not considered here yet!");
@@ -261,9 +272,13 @@ void dcsrmm_IKJ_D128
          exit(1);
       }
       else /* beta == X*/
+         #if defined(LOAD_BALANCE) 
+         dcsrmm_IKJ_D128_LDB_aXbX(transa, m, n, k, alpha, matdescra, nnz, rows, 
+               cols, val, indx, pntrb, pntre, B, ldb, beta, C, ldc);
+         #else
          dcsrmm_IKJ_D128_aXbX(transa, m, n, k, alpha, matdescra, nnz, rows, 
                cols, val, indx, pntrb, pntre, B, ldb, beta, C, ldc);
-
+         #endif
    }
 }
 
