@@ -244,6 +244,10 @@ void dcsrmm_IKJ_D128
    }
    else if (alpha == 1.0)
    {
+/*
+ *    FIXME: load balancing version works only for small M due to TH_INT
+ *    so, please check m before calling... or change the TH_INT to BCL_INT 
+ */
       if (beta == 1.0)
 #if 0
          dcsrmm_IKJ_D128_a1b1(transa, m, n, k, alpha, matdescra, nnz, rows, 

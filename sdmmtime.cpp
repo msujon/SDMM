@@ -330,6 +330,7 @@ void Usage()
    printf("-D <number>, number of cols of B & C [range = 1 to 256] \n");
    printf("-C <number>, Cachesize in KB to flush it for small workset \n");
    printf("-nrep <number>, number of repeatation \n");
+   printf("-nrblk <number>, number of random blk with row M  \n");
    printf("-T <0,1>, 1 means, run tester as well  \n");
    printf("-skHd<1>, 1 means, skip header of the printed results  \n");
    printf("-trusted <option#>\n" 
@@ -344,7 +345,7 @@ void Usage()
 
 void GetFlags(int narg, char **argv, string &inputfile, int &option, 
       INDEXTYPE &D, INDEXTYPE &M, int &csKB, int &nrep, int &isTest, int &skHd,
-      VALUETYPE &alpha, VALUETYPE &beta)
+      VALUETYPE &alpha, VALUETYPE &beta, int &nrblk)
 {
    int ialpha, ibeta; 
 /*
@@ -357,6 +358,7 @@ void GetFlags(int narg, char **argv, string &inputfile, int &option,
    M = 0;
    isTest = 0; 
    nrep = 1;
+   nrblk = 1;
    skHd = 0; // by default print header
    csKB = 25344; // L3 in KB 
    // alphaX, betaX would be the worst case for our implementation  
@@ -403,6 +405,10 @@ void GetFlags(int narg, char **argv, string &inputfile, int &option,
       else if(strcmp(argv[p], "-ibeta") == 0)
       {
 	 ibeta = atoi(argv[p+1]);
+      }
+      else if(strcmp(argv[p], "-nrblk") == 0)
+      {
+	 nrblk = atoi(argv[p+1]);
       }
       else if(strcmp(argv[p], "-h") == 0)
       {
@@ -896,7 +902,7 @@ vector <double> doTiming_Acsr
  const VALUETYPE alpha,
  const VALUETYPE beta,
  const int csKB,
- const int rblkid,   /* if M < A.rows, select a row blk to time */
+ const int rblkid,  /* if M < A.rows,select a row blk to time */
  const int nrep     
  )
 {
@@ -1012,12 +1018,13 @@ vector <double> doTiming_Acsr
 
 void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M, 
       int csKB, int nrep, int isTest, int skipHeader, VALUETYPE alpha, 
-      VALUETYPE beta)
+      VALUETYPE beta, int nrblk)
 {
-   int nerr;
+   int nerr, i;
    vector<double> res0, res1; 
-   double t0, t1, t2; 
-   INDEXTYPE N, rblkid; /* A->MxN, B-> NxD, C-> MxD */
+   double exeTime0, exeTime1, inspTime0, inspTime1; 
+   INDEXTYPE N, blkid; /* A->MxN, B-> NxD, C-> MxD */
+   vector <INDEXTYPE> rblkids;
    CSR<INDEXTYPE, VALUETYPE> A_csr0; 
    CSR<INDEXTYPE, VALUETYPE> A_csr1; 
    CSC<INDEXTYPE, VALUETYPE> A_csc;
@@ -1084,6 +1091,9 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
       }
    }
 
+   if (nrblk < 1) 
+      nrblk = 1;
+
 #if 0
    // NOT UPDATED
    t1 = doTiming_Acsr_CacheFlushing<SDMM_CSR_IKJ_D128>(A_csr1, M, N, D, csKB, 
@@ -1100,21 +1110,54 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
  * NOTE: We are keeping seperate A_csr so that later call doesn't get any 
  * benefit of being already on cache. 
  */
+/*
+ * 
+ */
    if (M != A_csr0.rows)  // select blk id randomly 
    {
       INDEXTYPE MM = A_csr0.rows / M;  // muliple of M 
       //srand(time(NULL)); 
       srand(2);  // to make timer repeatable use fixed seed
-      rblkid = (rand() % MM) + 0 ; // 0 to MM-1 
+      
+      i = nrblk;
+      while (i--)
+      {
+         blkid = (rand() % MM) + 0 ; // 0 to MM-1 
+         rblkids.push_back(blkid);
+      }
    }
    else
-      rblkid = 0; // don't care 
+   {
+      rblkids.push_back(0); // don't care 
+      nrblk = 1;
+   }
 
-   res0 = doTiming_Acsr<MKL_INT, callTimerMKL_Acsr>(A_csr0, M, D, N, 
-               alpha, beta, csKB, rblkid, nrep);
-   res1 = doTiming_Acsr<INDEXTYPE, callTimer_Acsr>(A_csr0, M, D, N, 
-               alpha, beta, csKB, rblkid, nrep);
+/*
+ * call multiple times for each random blkid, take average 
+ */
+   inspTime0 = inspTime1 = exeTime0 = exeTime1 = 0.0;
+   i = nrblk;
+   while(i--)
+   {
+      blkid = rblkids[i];
+
+      res0 = doTiming_Acsr<MKL_INT, callTimerMKL_Acsr>(A_csr0, M, D, N, 
+                  alpha, beta, csKB, blkid, nrep);
+      inspTime0 += res0[0];
+      exeTime0 += res0[1];
+
+      res1 = doTiming_Acsr<INDEXTYPE, callTimer_Acsr>(A_csr0, M, D, N, 
+                  alpha, beta, csKB, blkid, nrep);
+      inspTime1 += res1[0];
+      exeTime1 += res1[1];
+   }
+  
+   inspTime0 /= nrblk; 
+   inspTime1 /= nrblk; 
    
+   exeTime0 /= nrblk; 
+   exeTime1 /= nrblk; 
+
    if(!skipHeader) 
    {
       cout << "Filename,"
@@ -1131,20 +1174,23 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
          << "Critical_point" << endl;
    }
    
-   double critical_point = (res0[0]/(res1[1]-res0[1])) < 0.0 ?  -1.0 
-                                             : (res0[0]/(res1[1]-res0[1])); 
+   //double critical_point = (res0[0]/(res1[1]-res0[1])) < 0.0 ?  -1.0 
+   //                                          : (res0[0]/(res1[1]-res0[1])); 
+   // FIXME: what if exeTime0 & exeTime1 is very similar 
+   double critical_point = (inspTime0/(exeTime1-exeTime0)) < 0.0 ?  -1.0 
+                                             : (inspTime0/(exeTime1-exeTime0)); 
    cout << inputfile << "," 
         << A_csr0.nnz << "," 
         << M << "," 
         << N << "," 
         << D << "," << std::scientific
-        << res0[0] << "," 
-        << res0[1] << "," 
-        << res1[0] << "," 
-        << res1[1] << "," 
+        << inspTime0 << "," 
+        << exeTime0 << "," 
+        << inspTime1 << "," 
+        << exeTime1 << "," 
         << std::fixed << std::showpoint
-        << res0[1]/res1[1] << ","
-        << ((res0[0]+res0[1])/(res1[0]+res1[1])) << ","  
+        << exeTime0/exeTime1 << ","
+        << ((inspTime0+exeTime0)/(inspTime1+exeTime1)) << ","  
         << critical_point
         << endl;
 }
@@ -1153,11 +1199,12 @@ int main(int narg, char **argv)
 {
    INDEXTYPE D, M;
    VALUETYPE alpha, beta;
-   int option, csKB, nrep, isTest, skHd;
+   int option, csKB, nrep, isTest, skHd, nrblk;
    string inputfile; 
    GetFlags(narg, argv, inputfile, option, D, M, csKB, nrep, isTest, skHd, 
-            alpha, beta);
-   GetSpeedup(inputfile, option, D, M, csKB, nrep, isTest, skHd, alpha, beta);
+            alpha, beta, nrblk);
+   GetSpeedup(inputfile, option, D, M, csKB, nrep, isTest, skHd, alpha, beta, 
+         nrblk);
    return 0;
 }
 
