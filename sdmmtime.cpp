@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include <random>
 #include <cassert>
-#include <time.h>
+//#include <time.h>
+#include <omp.h>
 
 // rename them as cpp or hpp and add in Makefile
 #include "CSC.h"
