@@ -28,6 +28,7 @@
 #define ATL_AlignPtr(vp) (void*) \
         ATL_MulByCachelen(ATL_DivByCachelen((((size_t)(vp))+ATL_Cachelen-1)))
 
+
 /*==============================================================================*
  *                   API FOR ALL CSR & CSC BASED KERNELS
  *                   ------------------------------------
@@ -746,6 +747,7 @@ vector<double> callTimerMKL_Acsr
    end = omp_get_wtime();
    results.push_back((end-start)/((double)nrep)); // execution time 
 
+   mkl_sparse_destroy(Amkl);
    return(results);
 }
 
@@ -1119,13 +1121,18 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
       INDEXTYPE MM = A_csr0.rows / M;  // muliple of M 
       //srand(time(NULL)); 
       srand(2);  // to make timer repeatable use fixed seed
-      
+   #if 1      
       i = nrblk;
       while (i--)
       {
          blkid = (rand() % MM) + 0 ; // 0 to MM-1 
          rblkids.push_back(blkid);
       }
+   #else // testing specific blkid  
+      blkid = 37500;
+      rblkids.push_back(blkid);
+      nrblk = 1;
+   #endif
    }
    else
    {
@@ -1142,13 +1149,18 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
    {
       blkid = rblkids[i];
 
+      //cout << "***Timing trusted kernels" << endl; 
       res0 = doTiming_Acsr<MKL_INT, callTimerMKL_Acsr>(A_csr0, M, D, N, 
                   alpha, beta, csKB, blkid, nrep);
+      //cout << "      blkid = " << blkid << " InspTime = " << res0[0] 
+      //               <<" ExeTime = " << res0[1] << endl;    
       inspTime0 += res0[0];
       exeTime0 += res0[1];
-
+      
+      //cout << "***Timing test kernels" << endl; 
       res1 = doTiming_Acsr<INDEXTYPE, callTimer_Acsr>(A_csr0, M, D, N, 
                   alpha, beta, csKB, blkid, nrep);
+      //cout << "      blkid = " << blkid << " ExeTime = " << res1[1] << endl;    
       inspTime1 += res1[0];
       exeTime1 += res1[1];
    }

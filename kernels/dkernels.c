@@ -9,10 +9,16 @@
 #define DREAL 1          /* needed in simd.h */ 
 #include "simd.h"
 //#include "dkernels.h"
-#include "dkernels_D128.h"
 
 #define DEBUG 0 
 
+//#define DESABLE_AVXZ 1 /* mainly to enable valgrind debugging */ 
+
+#ifndef DESABLE_AVXZ
+   #include "dkernels_D128.h"
+#else  /* FIXME: need to redesign kernels.h file */
+      #define BCL_INT int   
+#endif
 
 void dcsrmm_IKJ_a1b1 (const char transa, const BCL_INT m, const BCL_INT n, 
       const BCL_INT k,const double alpha, const char *matdescra, 
@@ -35,24 +41,6 @@ void dcsrmm_KIJ_a1b1 (const char transa, const BCL_INT m, const BCL_INT n,
       const BCL_INT *pntre, const double *B, const BCL_INT ldb, 
       const double beta, double *C, const BCL_INT ldc);
 
-/*
- * for Debug 
- */
-#ifdef DEBUG
-void PrintVector(char*name, VTYPE v)
-{
-   int i;
-#ifdef DREAL 
-   double *fptr = (double*) &v;
-#else
-   float *fptr = (float*) &v;
-#endif
-   fprintf(stdout, "vector-%s: < ", name);
-   for (i=0; i < VLEN; i++)
-      fprintf(stdout, "%lf, ", fptr[i]);
-   fprintf(stdout, ">\n");
-}
-#endif
 /*=============================================================================
  *                            CSR_IKJ
  *============================================================================*/
@@ -85,6 +73,9 @@ void dcsrmm_IKJ_a1b1
            m, n, k, ldb, ldc);
    fprintf(stdout, "          C = %p , B = %p , pntrb = %p , pntre = %p\n", 
            C, B, pntrb, pntre);
+#endif
+#ifdef PTTIME
+   #pragma omp parallel for schedule(static)
 #endif
    for (BCL_INT i=0; i < m; i++)
    {
@@ -128,6 +119,9 @@ void dcsrmm_IKJ_aXbX
    const BCL_INT ldc    // 2nd dimension size of b 
 )
 {
+#ifdef PTTIME
+   #pragma omp parallel for schedule(static)
+#endif
    for (BCL_INT i=0; i < m; i++)
    {
       BCL_INT ia0 = pntrb[i];
@@ -234,6 +228,8 @@ void dcsrmm_IKJ_D128
    const BCL_INT ldc    // 2nd dimension size of c 
 )
 {
+   
+   #ifndef DESABLE_AVXZ    
 /*
  * alpha and beta value: 0.0, 1.0, X (anything else)
  */
@@ -284,6 +280,10 @@ void dcsrmm_IKJ_D128
                cols, val, indx, pntrb, pntre, B, ldb, beta, C, ldc);
          #endif
    }
+#else /* just to use valgrind for now */
+   dcsrmm_IKJ(transa, m, n, k, alpha, matdescra, nnz, rows, cols, val, 
+         indx, pntrb, pntre, B, ldb, beta, C, ldc);
+#endif
 }
 
 /*============================================================================
