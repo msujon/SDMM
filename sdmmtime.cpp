@@ -516,8 +516,17 @@ int doChecking(IT NNZA, IT M, IT N, NT *C, NT *D, IT ldc)
 }
 
 template <csr_mm_t trusted, csr_mm_t test>
-int doTesting_Acsr(CSR<INDEXTYPE, VALUETYPE> &A, INDEXTYPE M, INDEXTYPE N, 
-      INDEXTYPE K, VALUETYPE alpha, VALUETYPE beta)
+int doTesting_Acsr
+(
+   CSR<INDEXTYPE, 
+   VALUETYPE> &A, 
+   INDEXTYPE M, 
+   INDEXTYPE N, 
+   INDEXTYPE K, 
+   VALUETYPE alpha, 
+   VALUETYPE beta,
+   const int rblkid  /* if M < A.rows,select a row blk to time */
+)
 {
    int nerr; 
    size_t i, j, szB, szC, ldc, ldb; 
@@ -584,11 +593,8 @@ int doTesting_Acsr(CSR<INDEXTYPE, VALUETYPE> &A, INDEXTYPE M, INDEXTYPE N,
  *       copy only the block colids & vals and rowptr but change the value of 
  *       rowptr to point based on new indices 
  */
-      INDEXTYPE indb, inde, rblkid, stM;
+      INDEXTYPE indb, inde, stM;
       INDEXTYPE MM = A.rows / M;  // muliple of M 
-      
-      srand(time(NULL)); // random block: to match with timer, can use same seed
-      rblkid = (rand() % MM) + 0 ; // 0 to MM-1 
       stM = rblkid*M;  // starting row number  
       
       #if 1 
@@ -1075,47 +1081,10 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
 
 #endif
 /*
- * Test for correctness when asked 
+ * Setting random blocks to test and time 
  */
-   if (isTest)
-   {
-      // testing with same kernel to test the tester itself: sanity check  
-      //nerr = doTesting_Acsr<dcsrmm_IKJ,dcsrmm_IKJ>
-      //                      (A_csr0, M, D, N, alpha, beta);
-      nerr = doTesting_Acsr<dcsrmm_IKJ_D128, MKL_csr_mm>
-                               (A_csr0, M, D, N, alpha, beta); 
-      // error checking 
-      if (!nerr)
-         fprintf(stdout, "PASSED TEST\n");
-      else
-      {
-         fprintf(stdout, "FAILED TEST, %d ELEMENTS\n", nerr);
-         exit(1); // test failed, not timed 
-      }
-   }
-
    if (nrblk < 1) 
       nrblk = 1;
-
-#if 0
-   // NOT UPDATED
-   t1 = doTiming_Acsr_CacheFlushing<SDMM_CSR_IKJ_D128>(A_csr1, M, N, D, csKB, 
-         nrep);
-   fprintf(stdout, "test time = %e\n", t1); 
-
-   t0 = doTiming_Acsr_CacheFlushing<Trusted_SDMM_CSR_IKJ>(A_csr0, M, N, D, csKB,
-         nrep);
-   fprintf(stdout, "Trusted time = %e\n", t0); 
-#endif
-/*
- *    general notation: A->MxK B->KxN, C->MxN
- *    SDMM with D     : A->MxN, B->NxD, C->MxD 
- * NOTE: We are keeping seperate A_csr so that later call doesn't get any 
- * benefit of being already on cache. 
- */
-/*
- * 
- */
    if (M != A_csr0.rows)  // select blk id randomly 
    {
       INDEXTYPE MM = A_csr0.rows / M;  // muliple of M 
@@ -1134,11 +1103,52 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
       nrblk = 1;
    #endif
    }
-   else
+   else // all rows 
    {
       rblkids.push_back(0); // don't care 
       nrblk = 1;
    }
+/*
+ * Test for correctness when asked 
+ */
+   if (isTest)
+   {
+      i = nrblk; 
+      while(i--)
+      {
+         blkid = rblkids[i];
+         // testing with same kernel to test the tester itself: sanity check  
+         //nerr = doTesting_Acsr<dcsrmm_IKJ,dcsrmm_IKJ>
+         //                      (A_csr0, M, D, N, alpha, beta);
+         nerr = doTesting_Acsr<dcsrmm_IKJ_D128, MKL_csr_mm>
+                               (A_csr0, M, D, N, alpha, beta, blkid); 
+         // error checking 
+         if (!nerr)
+            fprintf(stdout, "PASSED TEST\n");
+         else
+         {
+            fprintf(stdout, "FAILED TEST, %d ELEMENTS\n", nerr);
+            exit(1); // test failed, not timed 
+         }
+      }
+   }
+
+#if 0
+   // NOT UPDATED
+   t1 = doTiming_Acsr_CacheFlushing<SDMM_CSR_IKJ_D128>(A_csr1, M, N, D, csKB, 
+         nrep);
+   fprintf(stdout, "test time = %e\n", t1); 
+
+   t0 = doTiming_Acsr_CacheFlushing<Trusted_SDMM_CSR_IKJ>(A_csr0, M, N, D, csKB,
+         nrep);
+   fprintf(stdout, "Trusted time = %e\n", t0); 
+#endif
+/*
+ *    general notation: A->MxK B->KxN, C->MxN
+ *    SDMM with D     : A->MxN, B->NxD, C->MxD 
+ * NOTE: We are keeping seperate A_csr so that later call doesn't get any 
+ * benefit of being already on cache. 
+ */
 
 /*
  * call multiple times for each random blkid, take average 

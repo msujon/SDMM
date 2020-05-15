@@ -6,6 +6,7 @@ KERNEL = ./kernels
 #  to compiler C kernels 
 #
 KCC = gcc 
+#KCCFLAGS = -g -fopenmp -O3 -mavx  
 KCCFLAGS = -fopenmp -O3 -march=native 
 
 #
@@ -14,8 +15,9 @@ KCCFLAGS = -fopenmp -O3 -march=native
 
 CC = g++
 #FLAGS = -g -fopenmp -O3 -mavx -std=c++11 
-#FLAGS = -g -fopenmp -O3 -march=native -std=c++11
 FLAGS = -fopenmp -O3 -march=native -std=c++11
+#FLAGS = -g -fopenmp -O3 -march=native -std=c++11
+
 
 #
 # flags needed to run mkl

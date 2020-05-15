@@ -15,7 +15,7 @@ nblk=10
 #./runtime.sh -r $nrep -p 1 -m 1 -a 1 -b 1
 
 #alpha=X beta=X
-#./runtime.sh -r $nrep -p 0 -M 256 -k $nblk -a 2 -b 2  
-#./runtime.sh -r $nrep -p 0 -m 1 -a 2 -b 2
+./runtime.sh -r $nrep -p 0 -M 256 -k $nblk -a 2 -b 2  
+./runtime.sh -r $nrep -p 0 -m 1 -a 2 -b 2
 ./runtime.sh -r $nrep -p 1 -M 256 -k $nblk -a 2 -b 2  
-#./runtime.sh -r $nrep -p 1 -m 1 -a 2 -b 2
+./runtime.sh -r $nrep -p 1 -m 1 -a 2 -b 2

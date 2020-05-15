@@ -624,11 +624,11 @@ void dcsrmm_IKJ_D128_LDB_a1b1
          curRow += deg;
          if (curRow > RowPerThd)
          {
-            //ThRowId[tt] = i;
             if (tt == id)
                rowb = i; 
-            if (tt == id+1)
+            else if (tt == id+1)
                rowe = i; 
+            
             curRow = 0;
             RowPerThd = (Mnnz - cumRow) / (nthreads - tt);
             tt += 1; 
@@ -1057,7 +1057,8 @@ void dcsrmm_IKJ_D128_LDB_aXbX
       
       curRow = cumRow = 0; 
       tt = 1; 
-      
+     
+      rowe = -1;  /* init */
       // set rowstart for 1st thread  
       if (id == 0) 
          rowb = 0;
@@ -1069,11 +1070,15 @@ void dcsrmm_IKJ_D128_LDB_aXbX
          curRow += deg;
          if (curRow > RowPerThd)
          {
-            //ThRowId[tt] = i;
             if (tt == id)
                rowb = i; 
-            if (tt == id+1)
+            else if (tt == id+1)
                rowe = i; 
+         #if 0
+            // FIXME: can't break earlier!!! think how to do it
+            if (rowe != -1)
+               break; /* this thread is done with the calc */
+         #endif
             curRow = 0;
             RowPerThd = (Mnnz - cumRow) / (nthreads - tt);
             tt += 1; 
@@ -1084,7 +1089,9 @@ void dcsrmm_IKJ_D128_LDB_aXbX
       #endif
       if (tt == id+1)
          rowe = m; 
-
+#if 0
+      fprintf(stderr, "id=%d: rowb=%d, rowe=%d\n", id, rowb, rowe);
+#endif
 
       for (i=rowb; i < rowe; i++)
       {
