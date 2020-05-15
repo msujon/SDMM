@@ -5,9 +5,13 @@
 #     rdir = project directory 
 #     mdir = dataset directory 
 #
-rdir=/home/msujon/git/IU/msujon/SDMM
+rdir=./
+mdir=../dataset/SuiteSparse/formated
+resdir=results
+
+#rdir=/home/msujon/git/IU/msujon/SDMM
 #rdir=/home/msujon/git/IU/msujon/Timing/SDMM 
-mdir=/home/msujon/git/IU/msujon/dataset/SuiteSparse/formated
+#mdir=/home/msujon/git/IU/msujon/dataset/SuiteSparse/formated
 
 #dsets="N1500k-2M"
 #dsets="N1M-1500k"
@@ -21,7 +25,6 @@ dsets="N100k-200k-FM N200k-500k-FM N500k-1M-FM N1M-1500k-FM N1500k-2M-FM N2M-3M-
 
 #dsets="N10M-15M-FM"
 
-resdir=results
 
 #defualt values 
 isMAll=0
