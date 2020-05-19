@@ -6,6 +6,7 @@ KERNEL = ./kernels
 #  to compiler C kernels 
 #
 KCC = gcc 
+#KCCFLAGS = -g -fopenmp -O3 -mavx  
 KCCFLAGS = -fopenmp -O3 -march=native 
 
 #
@@ -14,8 +15,9 @@ KCCFLAGS = -fopenmp -O3 -march=native
 
 CC = g++
 #FLAGS = -g -fopenmp -O3 -mavx -std=c++11 
-#FLAGS = -g -fopenmp -O3 -march=native -std=c++11
 FLAGS = -fopenmp -O3 -march=native -std=c++11
+#FLAGS = -g -fopenmp -O3 -march=native -std=c++11
+
 
 #
 # flags needed to run mkl
@@ -30,7 +32,8 @@ PT_LD_MKL_FLAG =  -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_ilp64.a 
 	       ${MKLROOT}/lib/intel64/libmkl_gnu_thread.a \
 	       ${MKLROOT}/lib/intel64/libmkl_core.a -Wl,--end-group -lgomp \
 	       -lpthread -lm -ldl  
-MYPT_FLAG = -DPTTIME 
+#MYPT_FLAG = -DPTTIME 
+MYPT_FLAG = -DPTTIME -DLOAD_BALANCE -DNTHREADS=18
 
 
 #serial version of MKL 

@@ -10,7 +10,23 @@
  * INT type can be changed here, implemenetation not dependent on int  
  */
 #define BCL_INT int 
+#define BCL_TYPE double 
 #define BCL_VLEN 8   // depends on arch, need to guard it with macro  
+
+#define TH_INT short int 
+
+typedef struct BnCSR{
+   BCL_INT nNblk;
+   BCL_INT szblk; 
+   BCL_INT rows;  
+   BCL_INT cols;  
+   BCL_INT nnz;
+   BCL_TYPE *rowptr;
+   BCL_TYPE *colids;
+   BCL_TYPE *values;
+   int isZerobased; 
+} BnCSR_t;
+
 
 // double function prototypes  
 void dcsrmm_IKJ (const char transa, const BCL_INT m, const BCL_INT n, 

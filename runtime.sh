@@ -5,8 +5,13 @@
 #     rdir = project directory 
 #     mdir = dataset directory 
 #
-rdir=/home/msujon/git/IU/msujon/SDMM
-mdir=/home/msujon/git/IU/msujon/dataset/SuiteSparse/formated
+rdir=./
+mdir=../dataset/SuiteSparse/formated
+resdir=results
+
+#rdir=/home/msujon/git/IU/msujon/SDMM
+#rdir=/home/msujon/git/IU/msujon/Timing/SDMM 
+#mdir=/home/msujon/git/IU/msujon/dataset/SuiteSparse/formated
 
 #dsets="N1500k-2M"
 #dsets="N1M-1500k"
@@ -14,9 +19,12 @@ mdir=/home/msujon/git/IU/msujon/dataset/SuiteSparse/formated
 #dsets="N100k-N200k"
 #dsets="N25k-N50k N50k-100k N100k-N200k N200k-500k N500k-1M N1M-1500k"
 
-dsets="N100k-N200k-FM N200k-500k-FM N500k-1M-FM N1M-1500k-FM N1500k-2M-FM N2M-3M-FM N3M-4M-FM N4M-5M-FM N5M-N6M N7M-10M"
+#dsets="N100k-N200k-FM N200k-500k-FM N500k-1M-FM N1M-1500k-FM N1500k-2M-FM N2M-3M-FM N3M-4M-FM N4M-5M-FM N5M-N6M N7M-10M"
 
-resdir=results
+dsets="N100k-200k-FM N200k-500k-FM N500k-1M-FM N1M-1500k-FM N1500k-2M-FM N2M-3M-FM N3M-4M-FM N4M-5M-FM N5M-6M-FM N7M-10M-FM N10M-15M-FM"
+
+#dsets="N10M-15M-FM"
+
 
 #defualt values 
 isMAll=0
@@ -24,6 +32,7 @@ m=256
 d=128 
 isPTtime=1
 nrep=10
+nblk=10
 ialpha=2
 ibeta=2
 
@@ -36,13 +45,14 @@ Options:
 -M [val]    value of M (default 256)
 -p [1/0]    time parallel version (default parallel varsion)
 -r [val]    number of repeatation (default 10) 
+-k [val]    number of random blocks when M < rows (default 10) 
 -a [0,1,2]  value of alpha: 0,0, 1.0, X (default X) 
 -b [0,1,2]  value of beta: 0,0, 1.0, X (default X) 
 --help      display help and exit
 "
 
 
-while getopts "d:m:M:p:r:a:b:" opt
+while getopts "d:m:M:p:r:a:b:k:" opt
 do
    case $opt in 
       d) 
@@ -65,6 +75,9 @@ do
          ;;
       b)
          ibeta=$OPTARG
+         ;;
+      k)
+         nblk=$OPTARG
          ;;
       \?)
          echo "$usage"
@@ -111,7 +124,7 @@ do
    do 
       #echo "$file"
       ./bin/xsdmmtime${par} -input $file $Mval -D $d -nrep $nrep -skHd 1 \
-         -ialpha $ialpha -ibeta $ibeta | tee -a $res 
+         -ialpha $ialpha -ibeta $ibeta -nrblk $nblk | tee -a $res 
    done
 done
 
