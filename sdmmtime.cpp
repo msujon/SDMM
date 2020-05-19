@@ -10,7 +10,8 @@
 #include "commonutility.h"
 #include "utility.h"
 
-#define INDEXTYPE int
+//#define INDEXTYPE int
+#define INDEXTYPE long int
 #define VALUETYPE double 
 #define DREAL 1  // needed to select mkl kernels 
 

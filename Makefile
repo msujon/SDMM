@@ -33,7 +33,8 @@ PT_LD_MKL_FLAG =  -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_ilp64.a 
 	       ${MKLROOT}/lib/intel64/libmkl_core.a -Wl,--end-group -lgomp \
 	       -lpthread -lm -ldl  
 #MYPT_FLAG = -DPTTIME 
-MYPT_FLAG = -DPTTIME -DLOAD_BALANCE -DNTHREADS=18
+#MYPT_FLAG = -DPTTIME -DLOAD_BALANCE -DNTHREADS=18
+MYPT_FLAG = -DPTTIME -DLOAD_BALANCE -DNTHREADS=48
 
 
 #serial version of MKL 

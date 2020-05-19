@@ -6,7 +6,8 @@
 #     mdir = dataset directory 
 #
 rdir=./
-mdir=../dataset/SuiteSparse/formated
+#mdir=../dataset/SuiteSparse/formated
+mdir=../../dataset/SuiteSparse/formated
 resdir=results
 
 #rdir=/home/msujon/git/IU/msujon/SDMM
@@ -21,9 +22,12 @@ resdir=results
 
 #dsets="N100k-N200k-FM N200k-500k-FM N500k-1M-FM N1M-1500k-FM N1500k-2M-FM N2M-3M-FM N3M-4M-FM N4M-5M-FM N5M-N6M N7M-10M"
 
-dsets="N100k-200k-FM N200k-500k-FM N500k-1M-FM N1M-1500k-FM N1500k-2M-FM N2M-3M-FM N3M-4M-FM N4M-5M-FM N5M-6M-FM N7M-10M-FM N10M-15M-FM"
+dsets="N100k-200k-FM N200k-500k-FM N500k-1M-FM N1M-1500k-FM N1500k-2M-FM N2M-3M-FM N3M-4M-FM N4M-5M-FM N5M-6M-FM N7M-10M-FM N10M-15M-FM N15M-20M-FM N20M-30M-FM"
 
-#dsets="N10M-15M-FM"
+#dsets="N30M-40M-FM"
+#dsets="N40M-50M-FM"
+#dsets="N50M-60M-FM"
+#dsets="N60M-70M-FM"
 
 
 #defualt values 
