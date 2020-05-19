@@ -332,7 +332,7 @@ void Usage()
    printf("-D <number>, number of cols of B & C [range = 1 to 256] \n");
    printf("-C <number>, Cachesize in KB to flush it for small workset \n");
    printf("-nrep <number>, number of repeatation \n");
-   printf("-nrblk <number>, number of random blk with row M  \n");
+   printf("-nrblk <number>, number of random blk with row M, 0/-1: all  \n");
    printf("-T <0,1>, 1 means, run tester as well  \n");
    printf("-skHd<1>, 1 means, skip header of the printed results  \n");
    printf("-trusted <option#>\n" 
@@ -1029,7 +1029,8 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
       int csKB, int nrep, int isTest, int skipHeader, VALUETYPE alpha, 
       VALUETYPE beta, int nrblk)
 {
-   int nerr, i;
+   int nerr, norandom;
+   INDEXTYPE i;
    vector<double> res0, res1; 
    double exeTime0, exeTime1, inspTime0, inspTime1; 
    INDEXTYPE N, blkid; /* A->MxN, B-> NxD, C-> MxD */
@@ -1082,28 +1083,38 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
 #endif
 /*
  * Setting random blocks to test and time 
+ * nrblk < 1 means, all blocks divisible by block size  
  */
-   if (nrblk < 1) 
-      nrblk = 1;
-   if (M != A_csr0.rows)  // select blk id randomly 
+   /*if (nrblk < 1) 
+      nrblk = 1;*/
+   norandom = 0; 
+   if (M != A_csr0.rows)  // select blk id  
    {
       INDEXTYPE MM = A_csr0.rows / M;  // muliple of M 
-      //srand(time(NULL)); 
-      srand(2);  // to make timer repeatable use fixed seed
-   #if 1      
-      i = nrblk;
-      while (i--)
+      if (nrblk > 0) /* select nrblk random block */
       {
-         blkid = (rand() % MM) + 0 ; // 0 to MM-1 
+         //srand(time(NULL)); 
+         srand(2);  // to make timer repeatable use fixed seed
+      #if 1      
+         i = nrblk;
+         while (i--)
+         {
+            blkid = (rand() % MM) + 0 ; // 0 to MM-1 
+            rblkids.push_back(blkid);
+         }
+      #else // testing specific blkid  
+         blkid = 37500;
          rblkids.push_back(blkid);
+         nrblk = 1;
+      #endif
       }
-   #else // testing specific blkid  
-      blkid = 37500;
-      rblkids.push_back(blkid);
-      nrblk = 1;
-   #endif
+      else /* consider all blocks divisible by block size */
+      {
+         nrblk = MM;
+         norandom = 1; // want to avoid storing in vector in this case  
+      }
    }
-   else // all rows 
+   else // M = all rows 
    {
       rblkids.push_back(0); // don't care 
       nrblk = 1;
@@ -1113,10 +1124,9 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
  */
    if (isTest)
    {
-      i = nrblk; 
-      while(i--)
+      for (i=0; i < nrblk; i++)
       {
-         blkid = rblkids[i];
+         blkid = (!norandom) ? rblkids[i] : i;
          // testing with same kernel to test the tester itself: sanity check  
          //nerr = doTesting_Acsr<dcsrmm_IKJ,dcsrmm_IKJ>
          //                      (A_csr0, M, D, N, alpha, beta);
@@ -1154,10 +1164,9 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
  * call multiple times for each random blkid, take average 
  */
    inspTime0 = inspTime1 = exeTime0 = exeTime1 = 0.0;
-   i = nrblk;
-   while(i--)
+   for (i=0; i < nrblk; i++)
    {
-      blkid = rblkids[i];
+      blkid = (!norandom) ? rblkids[i] : i;
 
       //cout << "***Timing trusted kernels" << endl; 
       res0 = doTiming_Acsr<MKL_INT, callTimerMKL_Acsr>(A_csr0, M, D, N, 
