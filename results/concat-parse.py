@@ -1,3 +1,4 @@
+#!/usr/bin/python
 import glob
 import pandas as pd
 
@@ -28,6 +29,7 @@ count_fast = sum(spdata['Speedup_exe_time'] > 1.0)
 print "max = " + str(max1)
 print "min = " + str(min1)
 print "mean = " + str(mean1)
+print "median = " + str(median1)
 print "count = " + str(count1)
 print "count_slow = " + str(count_slow)
 print "count_fast = " + str(count_fast)
