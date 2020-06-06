@@ -39,6 +39,8 @@ nrep=10
 nblk=10
 ialpha=2
 ibeta=2
+nthds=1
+ldb=s
 
 #commandline argument 
 
@@ -52,11 +54,13 @@ Options:
 -k [val]    number of random blocks when M < rows (default 10) 
 -a [0,1,2]  value of alpha: 0,0, 1.0, X (default X) 
 -b [0,1,2]  value of beta: 0,0, 1.0, X (default X) 
+-t [#]      nthreads, just to rename output file
+-l [s/d/l]  load balancing strategy 
 --help      display help and exit
 "
 
 
-while getopts "d:m:M:p:r:a:b:k:" opt
+while getopts "d:m:M:p:r:a:b:k:t:l:" opt
 do
    case $opt in 
       d) 
@@ -83,6 +87,12 @@ do
       k)
          nblk=$OPTARG
          ;;
+      t)
+         nthds=$OPTARG
+         ;;
+      l)
+         ldb=$OPTARG
+         ;;
       \?)
          echo "$usage"
          exit 1
@@ -98,8 +108,11 @@ mkdir -p $resdir
 #
 if [ $isPTtime -eq 1 ]
 then
-   par="_pt"
+   expar="_${nthds}${ldb}pt"
+   #expar="_pt"
+   par="_${ldb}${nthds}t"
 else
+   expar=""
    par=""
 fi
 #
@@ -115,6 +128,35 @@ else
 fi
 
 #
+#  select load balancing strategy 
+#
+#echo $ldb
+if [ $ldb == l ]
+then 
+   ldb='LOAD_BALANCE'
+else 
+   if [ $ldb == d ]
+   then 
+      ldb='DYNAMIC'
+   else
+      ldb='STATIC'
+   fi
+fi
+#
+#  Make exe: can't using srun...  
+#
+#module load gcc
+#module load make
+#make clean
+#make NTHDS=${nthds} LDB=${ldb}
+
+#
+#testing 
+#
+#echo "NTHDS=${nthds} LDB=${ldb}"
+#echo $par 
+#exit 1
+#
 #  run xsdmmtime for all dataset
 #
 for dset in $dsets
@@ -127,7 +169,7 @@ do
    for file in $FILES 
    do 
       #echo "$file"
-      ./bin/xsdmmtime${par} -input $file $Mval -D $d -nrep $nrep -skHd 1 \
+      ./bin/xsdmmtime${expar} -input $file $Mval -D $d -nrep $nrep -skHd 1 \
          -ialpha $ialpha -ibeta $ibeta -nrblk $nblk | tee -a $res 
    done
 done

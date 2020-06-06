@@ -7,4 +7,9 @@
 #SBATCH -o sdmmtime.o%j 
 
 module load gcc
+
+export OMP_PLACES=cores
+export OMP_PROC_BIND=close
+
+
 srun -p azad -N 1 -n 1 -c 1 bash runAll.sh 

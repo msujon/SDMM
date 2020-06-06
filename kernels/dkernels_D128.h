@@ -216,8 +216,15 @@ void dcsrmm_IKJ_D128_aXbX
  * we consider only A->notrans case for now
  *    *transa == 'N' matdescra="GXXC" alpha=1.0 beta=1.0  
  */
+#ifdef NTHREADS
+   omp_set_num_threads(NTHREADS);
+#endif
 #ifdef PTTIME
-   #pragma omp parallel for schedule(static)
+   #ifdef DYNAMIC 
+      #pragma omp parallel for schedule(dynamic)
+   #else
+      #pragma omp parallel for schedule(static)
+   #endif
 #endif
    for (BCL_INT i=0; i < m; i++)
    {

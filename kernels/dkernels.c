@@ -120,7 +120,11 @@ void dcsrmm_IKJ_aXbX
 )
 {
 #ifdef PTTIME
-   #pragma omp parallel for schedule(static)
+   #if defined(DYNAMIC) && 0
+      #pragma omp parallel for schedule(dynamic)
+   #else
+      #pragma omp parallel for schedule(static)
+   #endif
 #endif
    for (BCL_INT i=0; i < m; i++)
    {

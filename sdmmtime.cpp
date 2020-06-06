@@ -16,6 +16,7 @@
 #define DREAL 1  // needed to select mkl kernels 
 
 #include "kernels/kernels.h" 
+#include "mkl.h"
 #include "mkl_spblas.h"
 
 /*
@@ -700,6 +701,14 @@ vector<double> callTimerMKL_Acsr
  */
    // timing inspector phase 
    {
+/*
+ *	force mkl to use specified threads 
+ */
+      #ifdef NTHREADS
+         //cout << "setting mkl threads = " << NTHREADS << endl;
+         mkl_set_num_threads(NTHREADS); 
+      #endif
+
       start = omp_get_wtime();
    #ifdef DREAL 
       stat = mkl_sparse_d_create_csr (&Amkl, SPARSE_INDEX_BASE_ZERO, M, K, 
@@ -759,9 +768,9 @@ vector<double> callTimerMKL_Acsr
 }
 
 /*
- * Kernel timer wrapper for test kernel 
+ * Kernel timer wrapper for test kernel D128 
  */
-vector<double> callTimer_Acsr
+vector<double> callTimerD128_Acsr
 (
    const int flag,      // ROW_MAJOR, INDEX_BASE_ZERO 
    const int nrep,      // number of repeatation 
@@ -811,6 +820,62 @@ vector<double> callTimer_Acsr
 
    return(results);
 }
+
+#if 1
+/*
+ * Kernel timer wrapper for test kernel D128 
+ */
+vector<double> callTimer_Acsr
+(
+   const int flag,      // ROW_MAJOR, INDEX_BASE_ZERO 
+   const int nrep,      // number of repeatation 
+   const INDEXTYPE M,
+   const INDEXTYPE N,
+   const INDEXTYPE K, // A.cols
+   const VALUETYPE alpha,
+   const INDEXTYPE nnz,
+   const INDEXTYPE rows,
+   const INDEXTYPE cols,
+   VALUETYPE *values, 
+   INDEXTYPE *rowptr,
+   INDEXTYPE *colids,
+   const VALUETYPE *b,
+   const INDEXTYPE ldb,
+   const VALUETYPE beta,
+   VALUETYPE *c,
+   const INDEXTYPE ldc
+)
+{
+   double start, end;
+   vector <double> results;  // don't use single precision, use double  
+/*
+ * NOTE: 
+ *    flag can be used to select different option, like: ROW_MAJOR, 
+ *    INDEX_BASE_ZERO. For now, we only support following options (no checking):
+ *       SPARSE_INDEX_BASE_ZERO
+ *       SPARSE_OPERATION_NON_TRANSPOSE
+ *       SPARSE_LAYOUT_ROW_MAJOR
+ */
+   // timing inspector phase 
+   {
+      results.push_back(0.0); // no inspection phase 
+   }
+   
+   dcsrmm_IKJ('N', M, N, K, alpha, "GXXC", nnz, rows, cols, values, 
+              colids, rowptr, rowptr+1, b, ldb, beta, c, ldc);   
+   
+   start = omp_get_wtime();
+   for (int i=0; i < nrep; i++)
+   {
+      dcsrmm_IKJ('N', M, N, K, alpha, "GXXC", nnz, rows, cols, values, 
+                 colids, rowptr, rowptr+1, b, ldb, beta, c, ldc);   
+   }
+   end = omp_get_wtime();
+   results.push_back((end-start)/((double)nrep)); // execution time 
+
+   return(results);
+}
+#endif
 
 #if 0
 /* FIXME: NOT UPDATED 
@@ -926,6 +991,10 @@ vector <double> doTiming_Acsr
    IT *rowptr, *colids;
    VALUETYPE *values;
 
+#if defined(PTTIME) && defined(NTHREADS)
+   omp_set_num_threads(NTHREADS);
+#endif
+
    std::default_random_engine generator;
    std::uniform_real_distribution<double> distribution(0.0,1.0);
 
@@ -941,9 +1010,14 @@ vector <double> doTiming_Acsr
    pc = (VALUETYPE*)malloc(szC*sizeof(VALUETYPE)+ATL_Cachelen);
    assert(pc);
    c = (VALUETYPE*) ATL_AlignPtr(pc); 
-   
+#ifdef PTTIME
+   #pragma omp parallel for schedule(static)
+#endif
    for (i=0; i < szB; i++)
       b[i] = distribution(generator);  
+#ifdef PTTIME
+   #pragma omp parallel for schedule(static)
+#endif
    for (i=0; i < szC; i++)
       c[i] = distribution(generator);  
 
@@ -961,11 +1035,17 @@ vector <double> doTiming_Acsr
  */
       rowptr = (IT*) malloc((M+1)*sizeof(IT));
       assert(rowptr);
+#ifdef PTTIME
+   #pragma omp parallel for schedule(static)
+#endif
       for (i=0; i < M+1; i++)
          rowptr[i] = A.rowptr[i];
    
       colids = (IT*) malloc(A.nnz*sizeof(IT));
       assert(colids);
+#ifdef PTTIME
+   #pragma omp parallel for schedule(static)
+#endif
       for (i=0; i < A.nnz; i++)
          colids[i] = A.colids[i]; 
 /*
@@ -1011,6 +1091,9 @@ vector <double> doTiming_Acsr
    
    values = (VALUETYPE*) malloc(nnz*sizeof(VALUETYPE));
    assert(values);
+#ifdef PTTIME
+   #pragma omp parallel for schedule(static)
+#endif
    for (i=0; i < nnz; i++)
       values[i] = distribution(generator); // avoid all 1.0 values in timing  
 
@@ -1088,6 +1171,7 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
  */
    /*if (nrblk < 1) 
       nrblk = 1;*/
+
    norandom = 0; 
    if (M != A_csr0.rows)  // select blk id  
    {
@@ -1170,15 +1254,21 @@ void GetSpeedup(string inputfile, int option, INDEXTYPE D, INDEXTYPE M,
       blkid = (!norandom) ? rblkids[i] : i;
 
       //cout << "***Timing trusted kernels" << endl; 
+      
+      // call MKL
       res0 = doTiming_Acsr<MKL_INT, callTimerMKL_Acsr>(A_csr0, M, D, N, 
                   alpha, beta, csKB, blkid, nrep);
+      
+      // call csr based unoptimized kernel  
+      //res0 = doTiming_Acsr<INDEXTYPE, callTimer_Acsr>(A_csr0, M, D, N, 
+      //            alpha, beta, csKB, blkid, nrep);
       //cout << "      blkid = " << blkid << " InspTime = " << res0[0] 
       //               <<" ExeTime = " << res0[1] << endl;    
       inspTime0 += res0[0];
       exeTime0 += res0[1];
       
       //cout << "***Timing test kernels" << endl; 
-      res1 = doTiming_Acsr<INDEXTYPE, callTimer_Acsr>(A_csr0, M, D, N, 
+      res1 = doTiming_Acsr<INDEXTYPE, callTimerD128_Acsr>(A_csr0, M, D, N, 
                   alpha, beta, csKB, blkid, nrep);
       //cout << "      blkid = " << blkid << " ExeTime = " << res1[1] << endl;    
       inspTime1 += res1[0];
