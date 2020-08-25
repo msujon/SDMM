@@ -10,8 +10,18 @@
 #include "commonutility.h"
 #include "utility.h"
 
-#define INDEXTYPE int
-//#define INDEXTYPE long int
+/*
+ * to use 32/64 bit integer for our kernel, need to change BCL_INT in kernel 
+ * header as well for now. 
+ *
+ * to change integer type for MKL, need to Update Makefile to call specific lib
+ * of MKL ...  
+ */
+
+//#define INDEXTYPE int
+#define INDEXTYPE long
+
+
 #define VALUETYPE double 
 #define DREAL 1  // needed to select mkl kernels 
 
@@ -499,14 +509,14 @@ int doChecking(IT NNZA, IT M, IT N, NT *C, NT *D, IT ldc)
                     i, j, C[k], D[k], diff);
       #else // print single value... 
             if (!i && !j)
-               fprintf(stderr, "C(%d,%d) : expected=%e, got=%e, diff=%e\n",
+               fprintf(stderr, "C(%ld,%ld) : expected=%e, got=%e, diff=%e\n",
                        i, j, C[k], D[k], diff);
       #endif
             nerr++;
          }
          else if (D[k] != D[k]) /* test for NaNs */
          {
-            fprintf(stderr, "C(%d,%d) : expected=%e, got=%e\n",
+            fprintf(stderr, "C(%ld,%ld) : expected=%e, got=%e\n",
                     i, j, C[k], D[k]);
             nerr++;
 
@@ -527,7 +537,7 @@ int doTesting_Acsr
    INDEXTYPE K, 
    VALUETYPE alpha, 
    VALUETYPE beta,
-   const int rblkid  /* if M < A.rows,select a row blk to time */
+   const INDEXTYPE rblkid  /* if M < A.rows,select a row blk to time */
 )
 {
    int nerr; 
@@ -601,7 +611,7 @@ int doTesting_Acsr
       
       #if 1 
          fprintf(stdout, 
-                 "Randomly selecting blk (size=%d): blkid=%d, Mstart=%d\n",
+                 "Randomly selecting blk (size=%ld): blkid=%ld, Mstart=%ld\n",
                  M, rblkid, stM);
       #endif
 /*
@@ -704,10 +714,12 @@ vector<double> callTimerMKL_Acsr
 /*
  *	force mkl to use specified threads 
  */
+   #ifdef PTTME
       #ifdef NTHREADS
          //cout << "setting mkl threads = " << NTHREADS << endl;
          mkl_set_num_threads(NTHREADS); 
       #endif
+   #endif
 
       start = omp_get_wtime();
    #ifdef DREAL 
@@ -977,7 +989,7 @@ vector <double> doTiming_Acsr
  const VALUETYPE alpha,
  const VALUETYPE beta,
  const int csKB,
- const int rblkid,  /* if M < A.rows,select a row blk to time */
+ const IT rblkid,  /* if M < A.rows,select a row blk to time */
  const int nrep     
  )
 {
