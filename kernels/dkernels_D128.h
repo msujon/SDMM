@@ -1,8 +1,11 @@
 #ifndef DKERNEL_D128_H
 #define DKERNEL_D128_H
 
-#include "kernels.h"
 #include <assert.h> 
+//#include "kernels.h"
+
+#define DREAL 1  /* DREAL for double type needed in simd.h*/
+#include "simd.h"
 
 // consider aligned, make sure to call with aligned memory 
 //#ifdef ALIGNED
@@ -216,8 +219,15 @@ void dcsrmm_IKJ_D128_aXbX
  * we consider only A->notrans case for now
  *    *transa == 'N' matdescra="GXXC" alpha=1.0 beta=1.0  
  */
+#ifdef NTHREADS
+   omp_set_num_threads(NTHREADS);
+#endif
 #ifdef PTTIME
-   #pragma omp parallel for schedule(static)
+   #ifdef DYNAMIC 
+      #pragma omp parallel for schedule(dynamic)
+   #else
+      #pragma omp parallel for schedule(static)
+   #endif
 #endif
    for (BCL_INT i=0; i < m; i++)
    {
@@ -383,190 +393,7 @@ void dcsrmm_IKJ_D128_aXbX
 /*
  * load balancing with row element count 
  */
-#if 0
-void dcsrmm_IKJ_D128_LDB_a1b1 
-(
-   const char transa,     // 'N', 'T' , 'C' 
-   const BCL_INT m,     // number of rows of A 
-   const BCL_INT n,     // number of cols of C
-   const BCL_INT k,     // number of cols of A
-   const double alpha, // double scalar ?? why ptr 
-   const char *matdescra,  // 6 characr array descriptor for A:
-                           // [G/S/H/T/A/D],[L/U],[N/U],[F/C] -> [G,X,X,C] 
-   const BCL_INT nnz,   // nonzeros: need to recreate csr with mkl 
-   const BCL_INT rows,  // number of rows
-   const BCL_INT cols,  // number of columns 
-   const double *val,   // NNZ value  
-   const BCL_INT *indx,  // colids -> column indices 
-   const BCL_INT *pntrb, // starting index for rowptr
-   const BCL_INT *pntre, // ending index for rowptr
-   const double *B,     // Dense B matrix
-   const BCL_INT ldb,   // 2nd dimension of b for zero-based indexing  
-   const double beta,  // double scalar beta[0] 
-   double *C,           // Dense matrix c
-   const BCL_INT ldc    // 2nd dimension size of c 
-)
-{
-/*
- * we consider only A->notrans case for now
- *    *transa == 'N' matdescra="GXXC" alpha=1.0 beta=1.0  
- */
-   TH_INT *ThRowId; 
-   int RowPerThd; 
-   BCL_INT i;
-   BCL_INT Mnnz = 0; // Mnnz is the non zero value in M rows 
-   for (i=0; i < m; i++)
-      Mnnz += (pntre[i] - pntrb[i]); 
 
-   omp_set_num_threads(NTHREADS);
-/*
- * FIXME: what if, NTHREADS and nthreads are not same!!!
- */
-/*
- *    NOTE: now the idea is to distribute rows among threads by nnz count... 
- *    We will populate ThRowId just like rowptr, but with rowid
- *       ThRowId[i] -> indicates the row id i-thd start working with
- */
-#if 1
-   {
-      RowPerThd = Mnnz / NTHREADS; 
-      ThRowId = malloc(sizeof(TH_INT)*(NTHREADS+1)); //
-      assert(ThRowId);
-      ThRowId[0] = 0;
-      for (BCL_INT t=1, i=0; t < NTHREADS+1; t++)
-      {
-         if (i > m)
-            ThRowId[t] = 0;
-         else
-         {
-            while(pntre[i] < t*RowPerThd)
-               i++;
-            ThRowId[t] = (TH_INT)(++i);
-         }
-      }
-/*
- *       NOTE: Why may not match: 
- *          Later rows has very few non zeros 
- */
-      if (ThRowId[NTHREADS] != m)
-      {
-            //fprintf(stderr, "Last thread has to cover all remaining rows");
-            ThRowId[NTHREADS] = (TH_INT)(m);
-      }
-
-   }
-   #if 0
-      fprintf(stderr, "NTHREADS = %d\n", NTHREADS);
-      for (i=0; i < NTHREADS+1; i++)
-         fprintf(stderr, "%d, ", ThRowId[i]);
-      fprintf(stderr, "\n");
-   #endif
-#endif
-
-   #pragma omp parallel
-   {
-      int i, j, t;
-      int id = omp_get_thread_num();
-      int nthreads = omp_get_num_threads(); 
-#if 1 
-      assert(NTHREADS == nthreads);
-#endif
-      for (i=ThRowId[id]; i < ThRowId[id+1]; i++)
-      {
-      #if 0
-         fprintf(stderr, " rowid (t%d) = %d\n", id, i);
-      #endif
-         BCL_INT ia0 = pntrb[i];
-         BCL_INT ia1 = pntre[i]; 
-/*
- *       register block C  
- */
-         VTYPE VC0, VC1, VC2, VC3, VC4, VC5, VC6, VC7, 
-               VC8, VC9, VC10, VC11, VC12, VC13, VC14, VC15; 
-/*
- *       Assumption: C is aligned by VLENb, use vldu otherwise  
- */
-         BCL_VLD(VC0, C+i*ldc+VLEN*0); 
-         BCL_VLD(VC1, C+i*ldc+VLEN*1); 
-         BCL_VLD(VC2, C+i*ldc+VLEN*2); 
-         BCL_VLD(VC3, C+i*ldc+VLEN*3); 
-         BCL_VLD(VC4, C+i*ldc+VLEN*4); 
-         BCL_VLD(VC5, C+i*ldc+VLEN*5); 
-         BCL_VLD(VC6, C+i*ldc+VLEN*6); 
-         BCL_VLD(VC7, C+i*ldc+VLEN*7); 
-         BCL_VLD(VC8, C+i*ldc+VLEN*8); 
-         BCL_VLD(VC9, C+i*ldc+VLEN*9); 
-         BCL_VLD(VC10, C+i*ldc+VLEN*10); 
-         BCL_VLD(VC11, C+i*ldc+VLEN*11); 
-         BCL_VLD(VC12, C+i*ldc+VLEN*12); 
-         BCL_VLD(VC13, C+i*ldc+VLEN*13); 
-         BCL_VLD(VC14, C+i*ldc+VLEN*14); 
-         BCL_VLD(VC15, C+i*ldc+VLEN*15); 
-      
-         for (BCL_INT kk=ia0; kk < ia1; kk++)
-         {
-            VTYPE VB0, VB1, VB2, VB3, VB4, VB5, VB6, VB7, 
-               VB8, VB9, VB10, VB11, VB12, VB13, VB14, VB15; 
-            VTYPE VA0;
-            double a0 = val[kk];
-            BCL_INT ja0 = indx[kk];
-         
-            BCL_vset1(VA0, a0);
-            BCL_VLD(VB0, B+ja0*ldb+VLEN*0); 
-            BCL_VLD(VB1, B+ja0*ldb+VLEN*1); 
-            BCL_VLD(VB2, B+ja0*ldb+VLEN*2); 
-            BCL_VLD(VB3, B+ja0*ldb+VLEN*3); 
-            BCL_VLD(VB4, B+ja0*ldb+VLEN*4); 
-            BCL_VLD(VB5, B+ja0*ldb+VLEN*5); 
-            BCL_VLD(VB6, B+ja0*ldb+VLEN*6); 
-            BCL_VLD(VB7, B+ja0*ldb+VLEN*7); 
-            BCL_VLD(VB8, B+ja0*ldb+VLEN*8); 
-            BCL_VLD(VB9, B+ja0*ldb+VLEN*9); 
-            BCL_VLD(VB10, B+ja0*ldb+VLEN*10); 
-            BCL_VLD(VB11, B+ja0*ldb+VLEN*11); 
-            BCL_VLD(VB12, B+ja0*ldb+VLEN*12); 
-            BCL_VLD(VB13, B+ja0*ldb+VLEN*13); 
-            BCL_VLD(VB14, B+ja0*ldb+VLEN*14); 
-            BCL_VLD(VB15, B+ja0*ldb+VLEN*15); 
-       
-            BCL_vmac(VC0, VA0, VB0); 
-            BCL_vmac(VC1, VA0, VB1); 
-            BCL_vmac(VC2, VA0, VB2); 
-            BCL_vmac(VC3, VA0, VB3); 
-            BCL_vmac(VC4, VA0, VB4); 
-            BCL_vmac(VC5, VA0, VB5); 
-            BCL_vmac(VC6, VA0, VB6); 
-            BCL_vmac(VC7, VA0, VB7); 
-            BCL_vmac(VC8, VA0, VB8); 
-            BCL_vmac(VC9, VA0, VB9); 
-            BCL_vmac(VC10, VA0, VB10); 
-            BCL_vmac(VC11, VA0, VB11); 
-            BCL_vmac(VC12, VA0, VB12); 
-            BCL_vmac(VC13, VA0, VB13); 
-            BCL_vmac(VC14, VA0, VB14);
-            BCL_vmac(VC15, VA0, VB15); 
-         }
-         BCL_VST(C+i*ldc+VLEN*0, VC0); 
-         BCL_VST(C+i*ldc+VLEN*1, VC1); 
-         BCL_VST(C+i*ldc+VLEN*2, VC2); 
-         BCL_VST(C+i*ldc+VLEN*3, VC3); 
-         BCL_VST(C+i*ldc+VLEN*4, VC4); 
-         BCL_VST(C+i*ldc+VLEN*5, VC5); 
-         BCL_VST(C+i*ldc+VLEN*6, VC6); 
-         BCL_VST(C+i*ldc+VLEN*7, VC7); 
-         BCL_VST(C+i*ldc+VLEN*8, VC8); 
-         BCL_VST(C+i*ldc+VLEN*9, VC9); 
-         BCL_VST(C+i*ldc+VLEN*10, VC10); 
-         BCL_VST(C+i*ldc+VLEN*11, VC11); 
-         BCL_VST(C+i*ldc+VLEN*12, VC12); 
-         BCL_VST(C+i*ldc+VLEN*13, VC13); 
-         BCL_VST(C+i*ldc+VLEN*14, VC14); 
-         BCL_VST(C+i*ldc+VLEN*15, VC15); 
-      }
-   }
-   free(ThRowId);
-}
-#else
 void dcsrmm_IKJ_D128_LDB_a1b1 
 (
    const char transa,     // 'N', 'T' , 'C' 
@@ -736,10 +563,8 @@ void dcsrmm_IKJ_D128_LDB_a1b1
    }
 }
 
-#endif
-
-#if 0
-void dcsrmm_IKJ_D128_LDB_aXbX   
+/* load balancing using extra memory for thread */
+void dcsrmm_IKJ_D128_LDBM_aXbX   
 (
    const char transa,     // 'N', 'T' , 'C' 
    const BCL_INT m,     // number of rows of A 
@@ -1010,8 +835,9 @@ void dcsrmm_IKJ_D128_LDB_aXbX
    }
    free(ThRowId);
 }
-#else /* imp of LDB without extra memory */
 
+
+/* imp of LDB without extra memory */
 void dcsrmm_IKJ_D128_LDB_aXbX   
 (
    const char transa,     // 'N', 'T' , 'C' 
@@ -1250,9 +1076,8 @@ void dcsrmm_IKJ_D128_LDB_aXbX
    }
 }
 
-#endif
 
-
+#if 0
 /*
  * for testing, setup some parameter 
  */
@@ -1484,7 +1309,9 @@ void dcsrmm_IKJ_D128_BN_aXbX
    }
    }
 }
-#endif
+#endif 
+
+#endif /* end of LOAD_BALANCE */ 
 
 /*=============================================================================
  *                         CSC_KIJ 

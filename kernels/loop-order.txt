@@ -292,7 +292,7 @@ CSC:
 for (k=0; k < K; k++)
 {
    cl0 = A_colptr[k]; 
-   cl1 = A_colptr[k+1]-1; 
+   cl1 = A_colptr[k+1]; 
 
    for (i=cl0; i < cl1; i++)
    {
@@ -306,7 +306,28 @@ for (k=0; k < K; k++)
 }
 
 
+SDMM JKI with CSC:
+==================
 
+for (j=0; j < N; j++)
+{
+   for (k=0; k < K; k++)
+   {
+      b0 = B[k, j]; 
+      cl0 = A_colptr[k];
+      cl1 = A_col[k+1];
+      for (i=cl0; i < cl1; i++)
+      {
+         a0 = A[i];
+         IA = A_rowid[i];
+         C[IA, j] += b0 * a0;
+      }
+   }
+}
+
+B access: NxK 
+A access: NxNNZ
+C access: NxNNZ
 
 
 
